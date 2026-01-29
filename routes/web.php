@@ -9,6 +9,13 @@ use App\Http\Controllers\Admin\StockController;
 use App\Http\Controllers\Admin\TransferController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Admin\WarehouseController;
+use App\Http\Controllers\Admin\EmployeeController;
+use App\Http\Controllers\Admin\ProjectController;
+use App\Http\Controllers\Admin\TaskController;
+use App\Http\Controllers\Admin\TaskStockUsageController;
+use App\Http\Controllers\Admin\AttendanceReportController;
+use App\Http\Controllers\Admin\IssueController;
+use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
@@ -74,6 +81,38 @@ Route::middleware('auth')->group(function () {
 
     Route::resource('warehouses', WarehouseController::class);
     Route::resource('categories', ProductCategoryController::class);
-});
 
-// Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
+    // Employee Management
+    Route::resource('employees', EmployeeController::class);
+
+    // Project & Task Management
+    Route::resource('projects', ProjectController::class);
+    Route::resource('tasks', TaskController::class);
+    Route::get('tasks-by-project/{project}', [TaskController::class, 'getByProject'])->name('tasks.by-project');
+
+    // Task Material/Stock Usage
+    Route::get('tasks/{task}/materials', [TaskStockUsageController::class, 'index'])->name('tasks.materials.index');
+    Route::get('tasks/{task}/materials/available-stock', [TaskStockUsageController::class, 'availableStock'])->name('tasks.materials.available-stock');
+    Route::post('tasks/{task}/materials', [TaskStockUsageController::class, 'store'])->name('tasks.materials.store');
+    Route::delete('tasks/{task}/materials/{usage}', [TaskStockUsageController::class, 'destroy'])->name('tasks.materials.destroy');
+
+    // Attendance Reports
+    Route::get('attendance', [AttendanceReportController::class, 'index'])->name('attendance.index');
+    Route::get('attendance/daily', [AttendanceReportController::class, 'daily'])->name('attendance.daily');
+    Route::get('attendance/employee/{employee}', [AttendanceReportController::class, 'employeeReport'])->name('attendance.employee');
+    Route::get('attendance/export', [AttendanceReportController::class, 'export'])->name('attendance.export');
+
+    // Issues Management
+    Route::get('issues', [IssueController::class, 'index'])->name('issues.index');
+    Route::get('issues/{issue}', [IssueController::class, 'show'])->name('issues.show');
+    Route::post('issues/{issue}/status', [IssueController::class, 'updateStatus'])->name('issues.update-status');
+    Route::post('issues/{issue}/assign', [IssueController::class, 'assign'])->name('issues.assign');
+    Route::delete('issues/{issue}', [IssueController::class, 'destroy'])->name('issues.destroy');
+
+    // Analytics & Reports
+    Route::get('analytics/dashboard', [AnalyticsController::class, 'dashboard'])->name('analytics.dashboard');
+    Route::get('analytics/profit-loss', [AnalyticsController::class, 'profitLoss'])->name('analytics.profit-loss');
+    Route::get('analytics/labor-report', [AnalyticsController::class, 'laborReport'])->name('analytics.labor-report');
+    Route::get('analytics/material-usage', [AnalyticsController::class, 'materialUsage'])->name('analytics.material-usage');
+    Route::get('analytics/work-progress', [AnalyticsController::class, 'workProgress'])->name('analytics.work-progress');
+});

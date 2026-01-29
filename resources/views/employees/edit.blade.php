@@ -1,0 +1,123 @@
+@extends('layouts.app')
+@section('page_title', 'Edit Employee')
+@section('breadcrumb')
+    <li class="breadcrumb-item"><a href="{{ route('dashboard.index') }}">Dashboard</a></li>
+    <li class="breadcrumb-item"><a href="{{ route('employees.index') }}">Employees</a></li>
+    <li class="breadcrumb-item active">Edit Employee</li>
+@endsection
+@section('content')
+<section class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-8 offset-md-2">
+                <div class="card card-primary">
+                    <div class="card-header">
+                        <h3 class="card-title">Edit Employee: {{ $employee->name }}</h3>
+                    </div>
+                    <form method="POST" action="{{ route('employees.update', $employee) }}">
+                        @csrf
+                        @method('PUT')
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="employee_code">Employee Code <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control @error('employee_code') is-invalid @enderror"
+                                            id="employee_code" name="employee_code"
+                                            value="{{ old('employee_code', $employee->employee_code) }}" required>
+                                        @error('employee_code')
+                                            <span class="invalid-feedback">{{ $message }}</span>
+                                        @enderror
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="name">Full Name <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control @error('name') is-invalid @enderror"
+                                            id="name" name="name" value="{{ old('name', $employee->name) }}" required>
+                                        @error('name')
+                                            <span class="invalid-feedback">{{ $message }}</span>
+                                        @enderror
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="phone">Phone Number</label>
+                                        <input type="text" class="form-control @error('phone') is-invalid @enderror"
+                                            id="phone" name="phone" value="{{ old('phone', $employee->phone) }}">
+                                        @error('phone')
+                                            <span class="invalid-feedback">{{ $message }}</span>
+                                        @enderror
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="role">Role <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control @error('role') is-invalid @enderror"
+                                            id="role" name="role" value="{{ old('role', $employee->role) }}" required>
+                                        @error('role')
+                                            <span class="invalid-feedback">{{ $message }}</span>
+                                        @enderror
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="hourly_rate">Hourly Rate ($) <span class="text-danger">*</span></label>
+                                        <input type="number" step="0.01" min="0"
+                                            class="form-control @error('hourly_rate') is-invalid @enderror"
+                                            id="hourly_rate" name="hourly_rate"
+                                            value="{{ old('hourly_rate', $employee->hourly_rate) }}" required>
+                                        @error('hourly_rate')
+                                            <span class="invalid-feedback">{{ $message }}</span>
+                                        @enderror
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="site_id">Assigned Site</label>
+                                        <select class="form-control @error('site_id') is-invalid @enderror"
+                                            id="site_id" name="site_id">
+                                            <option value="">-- Not Assigned --</option>
+                                            @foreach($sites as $site)
+                                                <option value="{{ $site->id }}"
+                                                    {{ old('site_id', $employee->site_id) == $site->id ? 'selected' : '' }}>
+                                                    {{ $site->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        @error('site_id')
+                                            <span class="invalid-feedback">{{ $message }}</span>
+                                        @enderror
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="status">Status <span class="text-danger">*</span></label>
+                                <select class="form-control @error('status') is-invalid @enderror"
+                                    id="status" name="status" required>
+                                    <option value="active" {{ old('status', $employee->status) == 'active' ? 'selected' : '' }}>Active</option>
+                                    <option value="inactive" {{ old('status', $employee->status) == 'inactive' ? 'selected' : '' }}>Inactive</option>
+                                </select>
+                                @error('status')
+                                    <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <button type="submit" class="btn btn-primary">Update Employee</button>
+                            <a href="{{ route('employees.index') }}" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+@endsection

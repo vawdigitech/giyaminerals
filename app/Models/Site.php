@@ -16,6 +16,26 @@ class Site extends Model
      */
     protected $fillable = [
         'name',
-        'location'    
+        'location'
     ];
+
+    public function employees()
+    {
+        return $this->hasMany(Employee::class);
+    }
+
+    public function projects()
+    {
+        return $this->hasMany(Project::class);
+    }
+
+    public function attendances()
+    {
+        return $this->hasMany(Attendance::class);
+    }
+
+    public function issues()
+    {
+        return $this->hasMany(SiteIssue::class);
+    }
 }
