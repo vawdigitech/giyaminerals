@@ -33,7 +33,9 @@ class Attendance extends Model
     {
         static::saving(function ($attendance) {
             if ($attendance->check_in_time && $attendance->check_out_time) {
-                $attendance->total_hours = $attendance->check_in_time->diffInMinutes($attendance->check_out_time) / 60;
+                // Use check_out - check_in to ensure positive value, wrap with abs() for safety
+                $minutes = $attendance->check_out_time->diffInMinutes($attendance->check_in_time);
+                $attendance->total_hours = abs($minutes) / 60;
             }
         });
     }

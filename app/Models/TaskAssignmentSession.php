@@ -32,7 +32,9 @@ class TaskAssignmentSession extends Model
             if ($session->start_time && $session->end_time) {
                 $start = Carbon::parse($session->start_time);
                 $end = Carbon::parse($session->end_time);
-                $session->hours = $end->diffInMinutes($start) / 60;
+                // Ensure positive hours (end - start), wrap with abs() for safety
+                $minutes = $end->diffInMinutes($start);
+                $session->hours = abs($minutes) / 60;
             }
         });
 

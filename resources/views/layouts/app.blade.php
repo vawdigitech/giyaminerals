@@ -19,13 +19,15 @@
         href="{{ asset('template/plugins/datatables-responsive/css/responsive.bootstrap4.min.css') }}">
     <link rel="stylesheet"
         href="{{ asset('template/plugins/datatables-buttons/css/buttons.bootstrap4.min.css') }}">
+    <!-- overlayScrollbars -->
+    <link rel="stylesheet" href="{{ asset('template/plugins/overlayScrollbars/css/OverlayScrollbars.min.css') }}">
     <!-- Theme style -->
     <link rel="stylesheet" href="{{ asset('template/dist/css/adminlte.min.css') }}">
     <link rel="stylesheet" href="{{ asset('template/plugins/toastr/toastr.min.css') }}">
     @stack('styles')
 </head>
 
-<body class="hold-transition sidebar-mini">
+<body class="hold-transition sidebar-mini layout-fixed">
     <div class="wrapper">
 
         <!-- Navbar -->
@@ -83,6 +85,8 @@
     <script src="{{ asset('template/plugins/jquery/jquery.min.js') }}"></script>
     <script src="{{ asset('template/plugins/bootstrap/js/bootstrap.bundle.min.js') }}">
     </script>
+    <!-- overlayScrollbars -->
+    <script src="{{ asset('template/plugins/overlayScrollbars/js/jquery.overlayScrollbars.min.js') }}"></script>
     <script src="{{ asset('template/dist/js/adminlte.min.js') }}"></script>
 
     <!-- DataTables JS -->

@@ -269,4 +269,32 @@ class Task extends Model
                 return $photo->captured_date->format('Y-m-d');
             });
     }
+
+    /**
+     * Fix any negative hours in sessions and assignments
+     */
+    public function fixNegativeHours()
+    {
+        $fixed = false;
+
+        // Fix sessions with negative hours
+        foreach ($this->sessions()->where('hours', '<', 0)->get() as $session) {
+            $session->hours = abs($session->hours);
+            $session->saveQuietly();
+            $fixed = true;
+        }
+
+        // Fix assignments with negative hours
+        foreach ($this->assignments()->where('hours_worked', '<', 0)->get() as $assignment) {
+            $assignment->hours_worked = abs($assignment->hours_worked);
+            $assignment->saveQuietly();
+            $fixed = true;
+        }
+
+        if ($fixed) {
+            $this->recalculateCosts();
+        }
+
+        return $fixed;
+    }
 }

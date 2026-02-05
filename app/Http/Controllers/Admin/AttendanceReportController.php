@@ -13,6 +13,16 @@ class AttendanceReportController extends Controller
 {
     public function index(Request $request)
     {
+        // Fix any records with negative hours (one-time correction)
+        Attendance::where('total_hours', '<', 0)
+            ->whereNotNull('check_in_time')
+            ->whereNotNull('check_out_time')
+            ->each(function ($attendance) {
+                $minutes = $attendance->check_out_time->diffInMinutes($attendance->check_in_time);
+                $attendance->total_hours = abs($minutes) / 60;
+                $attendance->saveQuietly(); // Save without triggering events
+            });
+
         $query = Attendance::with(['employee', 'site']);
 
         // Default to current month

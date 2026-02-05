@@ -11,7 +11,8 @@ class TaskController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Task::with(['project', 'parent']);
+        $query = Task::with(['project', 'parent'])
+            ->withCount('subtasks');
 
         // Filter by project
         if ($request->filled('project_id')) {
@@ -109,13 +110,38 @@ class TaskController extends Controller
         $task->load([
             'project.site',
             'parent',
-            'subtasks',
+            'subtasks.assignments.employee',
             'assignments.employee',
+            'assignments.sessions',
             'workLogs.assignment.employee',
             'stockUsages.product',
             'stockUsages.stock',
             'progressPhotos.employee'
         ]);
+
+        // For master tasks, recalculate aggregated costs from subtasks
+        if ($task->hasSubtasks()) {
+            $task->recalculateAggregatedCosts();
+            $task->refresh();
+        } else {
+            // For leaf tasks only
+            // Fix any negative hours in sessions and assignments
+            $task->fixNegativeHours();
+
+            // Fix any assignments with 0 hourly rate by syncing from employee
+            $rateUpdated = false;
+            foreach ($task->assignments as $assignment) {
+                if ($assignment->syncHourlyRateFromEmployee()) {
+                    $rateUpdated = true;
+                }
+            }
+
+            // Recalculate costs if rates were updated
+            if ($rateUpdated) {
+                $task->recalculateCosts();
+                $task->refresh();
+            }
+        }
 
         return view('tasks.show', compact('task'));
     }

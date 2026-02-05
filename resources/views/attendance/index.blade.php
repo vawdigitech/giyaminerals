@@ -8,7 +8,7 @@
 <section class="content">
     <div class="container-fluid">
         <!-- Summary Cards -->
-        <div class="row">
+        <!-- <div class="row">
             <div class="col-lg-3 col-6">
                 <div class="small-box bg-success">
                     <div class="inner">
@@ -45,7 +45,7 @@
                     <div class="icon"><i class="fas fa-hourglass-half"></i></div>
                 </div>
             </div>
-        </div>
+        </div> -->
 
         <!-- Filters -->
         <div class="card card-outline card-primary mb-3">

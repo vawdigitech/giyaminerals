@@ -92,11 +92,39 @@ class TaskAssignment extends Model
     {
         $totalHours = $this->completedSessions()->sum('hours');
 
-        $this->update(['hours_worked' => $totalHours]);
+        // Ensure hours are positive
+        $totalHours = abs($totalHours);
+
+        $updateData = ['hours_worked' => $totalHours];
+
+        // If hourly_rate_at_time is 0, try to get the current employee rate
+        if (empty($this->hourly_rate_at_time) || $this->hourly_rate_at_time == 0) {
+            $employeeRate = $this->employee->hourly_rate ?? 0;
+            if ($employeeRate > 0) {
+                $updateData['hourly_rate_at_time'] = $employeeRate;
+            }
+        }
+
+        $this->update($updateData);
 
         // Recalculate task costs
         $this->task->recalculateCosts();
 
         return $totalHours;
+    }
+
+    /**
+     * Sync hourly rate from employee if assignment rate is 0
+     */
+    public function syncHourlyRateFromEmployee()
+    {
+        if (empty($this->hourly_rate_at_time) || $this->hourly_rate_at_time == 0) {
+            $employeeRate = $this->employee->hourly_rate ?? 0;
+            if ($employeeRate > 0) {
+                $this->update(['hourly_rate_at_time' => $employeeRate]);
+                return true;
+            }
+        }
+        return false;
     }
 }

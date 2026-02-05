@@ -92,22 +92,37 @@
                 <!-- Costs Card -->
                 <div class="card card-success">
                     <div class="card-header">
-                        <h3 class="card-title">Costs</h3>
+                        <h3 class="card-title">Costs @if($task->hasSubtasks())@endif</h3>
                     </div>
                     <div class="card-body">
                         <ul class="list-group list-group-unbordered">
                             <li class="list-group-item">
                                 <b>Quoted Amount</b> <span class="float-right">${{ number_format($task->quoted_amount ?? 0, 2) }}</span>
                             </li>
-                            <li class="list-group-item">
-                                <b>Labor Cost</b> <span class="float-right">${{ number_format($task->labor_cost ?? 0, 2) }}</span>
-                            </li>
-                            <li class="list-group-item">
-                                <b>Material Cost</b> <span class="float-right">${{ number_format($task->material_cost ?? 0, 2) }}</span>
-                            </li>
-                            <li class="list-group-item">
-                                <b>Actual Amount</b> <span class="float-right text-primary"><strong>${{ number_format($task->actual_amount ?? 0, 2) }}</strong></span>
-                            </li>
+                            @if($task->hasSubtasks())
+                                <li class="list-group-item">
+                                    <b>Labor Cost</b> <span class="float-right">${{ number_format($task->aggregated_labor_cost ?? 0, 2) }}</span>
+                                </li>
+                                <li class="list-group-item">
+                                    <b>Material Cost</b> <span class="float-right">${{ number_format($task->aggregated_material_cost ?? 0, 2) }}</span>
+                                </li>
+                                <li class="list-group-item">
+                                    <b>Actual Amount</b> <span class="float-right text-primary"><strong>${{ number_format($task->aggregated_actual_amount ?? 0, 2) }}</strong></span>
+                                </li>
+                                <li class="list-group-item">
+                                    <b>Total Hours</b> <span class="float-right">{{ number_format($task->total_hours_worked ?? 0, 1) }} hrs</span>
+                                </li>
+                            @else
+                                <li class="list-group-item">
+                                    <b>Labor Cost</b> <span class="float-right">${{ number_format($task->labor_cost ?? 0, 2) }}</span>
+                                </li>
+                                <li class="list-group-item">
+                                    <b>Material Cost</b> <span class="float-right">${{ number_format($task->material_cost ?? 0, 2) }}</span>
+                                </li>
+                                <li class="list-group-item">
+                                    <b>Actual Amount</b> <span class="float-right text-primary"><strong>${{ number_format($task->actual_amount ?? 0, 2) }}</strong></span>
+                                </li>
+                            @endif
                         </ul>
                     </div>
                 </div>
@@ -129,8 +144,8 @@
                 <!-- Subtasks -->
                 @if($task->subtasks->count() > 0)
                 <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Subtasks ({{ $task->subtasks->count() }})</h3>
+                    <div class="card-header bg-info">
+                        <h3 class="card-title"><i class="fas fa-tasks mr-1"></i> Subtasks ({{ $task->subtasks->count() }})</h3>
                     </div>
                     <div class="card-body p-0">
                         <table class="table table-striped">
@@ -140,6 +155,9 @@
                                     <th>Name</th>
                                     <th>Status</th>
                                     <th>Progress</th>
+                                    <th>Labor Cost</th>
+                                    <th>Material Cost</th>
+                                    <th>Actual</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -152,16 +170,105 @@
                                                 {{ ucfirst(str_replace('_', ' ', $subtask->status)) }}
                                             </span>
                                         </td>
-                                        <td>{{ $subtask->progress ?? 0 }}%</td>
+                                        <td>
+                                            <div class="progress progress-sm">
+                                                <div class="progress-bar bg-primary" style="width: {{ $subtask->progress ?? 0 }}%"></div>
+                                            </div>
+                                            <small>{{ $subtask->progress ?? 0 }}%</small>
+                                        </td>
+                                        <td>${{ number_format($subtask->labor_cost ?? 0, 2) }}</td>
+                                        <td>${{ number_format($subtask->material_cost ?? 0, 2) }}</td>
+                                        <td><strong>${{ number_format($subtask->actual_amount ?? 0, 2) }}</strong></td>
                                     </tr>
                                 @endforeach
                             </tbody>
+                            <tfoot class="bg-light">
+                                <tr>
+                                    <th colspan="4" class="text-right">Totals:</th>
+                                    <th>${{ number_format($task->subtasks->sum('labor_cost'), 2) }}</th>
+                                    <th>${{ number_format($task->subtasks->sum('material_cost'), 2) }}</th>
+                                    <th>${{ number_format($task->subtasks->sum('actual_amount'), 2) }}</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Employee Work Summary for Master Task -->
+                @php
+                    // Aggregate employee work from all subtasks
+                    $employeeWorkSummary = collect();
+                    foreach($task->subtasks as $subtask) {
+                        foreach($subtask->assignments as $assignment) {
+                            $empId = $assignment->employee_id;
+                            if ($employeeWorkSummary->has($empId)) {
+                                $existing = $employeeWorkSummary->get($empId);
+                                $existing['hours'] += $assignment->hours_worked ?? 0;
+                                $existing['cost'] += ($assignment->hours_worked ?? 0) * ($assignment->hourly_rate_at_time ?? 0);
+                                $existing['tasks'][] = $subtask->name;
+                                $employeeWorkSummary->put($empId, $existing);
+                            } else {
+                                $employeeWorkSummary->put($empId, [
+                                    'employee' => $assignment->employee,
+                                    'hours' => $assignment->hours_worked ?? 0,
+                                    'rate' => $assignment->hourly_rate_at_time ?? 0,
+                                    'cost' => ($assignment->hours_worked ?? 0) * ($assignment->hourly_rate_at_time ?? 0),
+                                    'tasks' => [$subtask->name],
+                                ]);
+                            }
+                        }
+                    }
+                @endphp
+
+                @if($employeeWorkSummary->count() > 0)
+                <div class="card">
+                    <div class="card-header bg-primary">
+                        <h3 class="card-title"><i class="fas fa-users mr-1"></i> Employee Work Summary</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Employee</th>
+                                    <th>Subtasks</th>
+                                    <th>Total Hours</th>
+                                    <th>Rate</th>
+                                    <th>Total Cost</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($employeeWorkSummary as $summary)
+                                    <tr>
+                                        <td>
+                                            <a href="{{ route('employees.show', $summary['employee']) }}">
+                                                {{ $summary['employee']->name ?? '-' }}
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <small>{{ implode(', ', array_unique($summary['tasks'])) }}</small>
+                                        </td>
+                                        <td>{{ number_format($summary['hours'], 1) }} hrs</td>
+                                        <td>${{ number_format($summary['rate'], 2) }}/hr</td>
+                                        <td><strong>${{ number_format($summary['cost'], 2) }}</strong></td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                            <tfoot class="bg-light">
+                                <tr>
+                                    <th colspan="2" class="text-right">Totals ({{ $employeeWorkSummary->count() }} employees):</th>
+                                    <th>{{ number_format($employeeWorkSummary->sum('hours'), 1) }} hrs</th>
+                                    <th></th>
+                                    <th>${{ number_format($employeeWorkSummary->sum('cost'), 2) }}</th>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                 </div>
                 @endif
+                @endif
 
-                <!-- Assigned Employees -->
+                @if(!$task->hasSubtasks())
+                <!-- Assigned Employees (only for leaf tasks) -->
                 <div class="card">
                     <div class="card-header">
                         <h3 class="card-title">Assigned Employees</h3>
@@ -206,48 +313,86 @@
                     </div>
                 </div>
 
-                <!-- Work Logs -->
+                <!-- Work Sessions (only for leaf tasks) -->
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Work Logs</h3>
+                        <h3 class="card-title">Work Sessions</h3>
                     </div>
                     <div class="card-body p-0">
+                        @php
+                            // Collect all sessions from assignments
+                            $allSessions = collect();
+                            foreach($task->assignments as $assignment) {
+                                foreach($assignment->sessions as $session) {
+                                    $allSessions->push([
+                                        'date' => $session->date,
+                                        'employee' => $assignment->employee,
+                                        'hours' => $session->hours ?? 0,
+                                        'start_time' => $session->start_time,
+                                        'end_time' => $session->end_time,
+                                        'status' => $session->status,
+                                        'end_reason' => $session->end_reason,
+                                    ]);
+                                }
+                            }
+                            $allSessions = $allSessions->sortByDesc('date');
+                        @endphp
                         <table class="table table-striped">
                             <thead>
                                 <tr>
                                     <th>Date</th>
                                     <th>Employee</th>
-                                    <th>Hours</th>
                                     <th>Time</th>
-                                    <th>Notes</th>
+                                    <th>Hours</th>
+                                    <th>Status</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @forelse($task->workLogs as $workLog)
+                                @forelse($allSessions as $session)
                                     <tr>
-                                        <td>{{ $workLog->date ? $workLog->date->format('M d, Y') : '-' }}</td>
-                                        <td>{{ $workLog->assignment->employee->name ?? '-' }}</td>
-                                        <td>{{ number_format($workLog->hours, 1) }}</td>
+                                        <td>{{ $session['date'] ? $session['date']->format('M d, Y') : '-' }}</td>
+                                        <td>{{ $session['employee']->name ?? '-' }}</td>
                                         <td>
-                                            @if($workLog->start_time && $workLog->end_time)
-                                                {{ $workLog->start_time }} - {{ $workLog->end_time }}
+                                            @if($session['start_time'])
+                                                {{ \Carbon\Carbon::parse($session['start_time'])->format('h:i A') }}
+                                                @if($session['end_time'])
+                                                    - {{ \Carbon\Carbon::parse($session['end_time'])->format('h:i A') }}
+                                                @endif
                                             @else
                                                 -
                                             @endif
                                         </td>
-                                        <td>{{ Str::limit($workLog->notes, 50) ?? '-' }}</td>
+                                        <td>{{ number_format($session['hours'], 2) }} hrs</td>
+                                        <td>
+                                            @if($session['status'] === 'active')
+                                                <span class="badge badge-success">Active</span>
+                                            @else
+                                                <span class="badge badge-secondary">{{ ucfirst($session['end_reason'] ?? 'Completed') }}</span>
+                                            @endif
+                                        </td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="5" class="text-center">No work logs recorded.</td>
+                                        <td colspan="5" class="text-center">No work sessions recorded.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
+                            @if($allSessions->count() > 0)
+                            <tfoot class="bg-light">
+                                <tr>
+                                    <th colspan="3" class="text-right">Total Hours:</th>
+                                    <th>{{ number_format($allSessions->sum('hours'), 2) }} hrs</th>
+                                    <th></th>
+                                </tr>
+                            </tfoot>
+                            @endif
                         </table>
                     </div>
                 </div>
+                @endif
 
-                <!-- Stock/Material Usage -->
+                @if(!$task->hasSubtasks())
+                <!-- Stock/Material Usage (only for leaf tasks) -->
                 <div class="card card-warning">
                     <div class="card-header">
                         <h3 class="card-title">
@@ -426,9 +571,10 @@
                         </div>
                     </div>
                 </div>
+                @endif
 
                 <!-- Progress Photos -->
-                <div class="card">
+                <div class="card card-secondary">
                     <div class="card-header">
                         <h3 class="card-title">
                             <i class="fas fa-camera mr-1"></i>
@@ -437,40 +583,17 @@
                     </div>
                     <div class="card-body">
                         @if($task->progressPhotos->count() > 0)
-                            @php
-                                $photosByDate = $task->progressPhotos->groupBy(function($photo) {
-                                    return $photo->captured_date ? $photo->captured_date->format('Y-m-d') : 'unknown';
-                                });
-                            @endphp
-                            @foreach($photosByDate as $date => $photos)
-                                <h5 class="mb-3">
-                                    <i class="fas fa-calendar-alt mr-1"></i>
-                                    {{ $date !== 'unknown' ? \Carbon\Carbon::parse($date)->format('M d, Y') : 'Unknown Date' }}
-                                </h5>
-                                <div class="row mb-4">
-                                    @foreach($photos as $photo)
-                                        <div class="col-md-4 col-sm-6 mb-3">
-                                            <div class="card card-outline card-secondary h-100">
-                                                @php
-                                                    $imgSrc = str_starts_with($photo->photo, 'data:') ? $photo->photo : 'data:image/jpeg;base64,' . $photo->photo;
-                                                @endphp
-                                                <a href="{{ $imgSrc }}" data-toggle="lightbox" data-gallery="progress-photos">
-                                                    <img src="{{ $imgSrc }}" class="card-img-top" alt="Progress Photo" style="height: 200px; object-fit: cover;">
-                                                </a>
-                                                <div class="card-body p-2">
-                                                    @if($photo->caption)
-                                                        <p class="card-text small mb-1">{{ $photo->caption }}</p>
-                                                    @endif
-                                                    <small class="text-muted">
-                                                        <i class="fas fa-user mr-1"></i>
-                                                        {{ $photo->employee->name ?? 'Unknown' }}
-                                                    </small>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    @endforeach
-                                </div>
-                            @endforeach
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                @foreach($task->progressPhotos as $photo)
+                                    @php
+                                        $imgSrc = str_starts_with($photo->photo, 'data:') ? $photo->photo : 'data:image/jpeg;base64,' . $photo->photo;
+                                        $title = ($photo->captured_date ? $photo->captured_date->format('M d, Y') : '') . ' - ' . ($photo->employee->name ?? 'Unknown');
+                                    @endphp
+                                    <a href="{{ $imgSrc }}" data-toggle="lightbox" data-gallery="progress-photos" data-title="{{ $title }}">
+                                        <img src="{{ $imgSrc }}" class="img-thumbnail" alt="Progress Photo" style="height: 70px; width: 70px; object-fit: cover;">
+                                    </a>
+                                @endforeach
+                            </div>
                         @else
                             <p class="text-center text-muted mb-0">No progress photos captured yet.</p>
                         @endif
@@ -494,7 +617,8 @@
             });
         });
 
-        // Material Management
+        @if(!$task->hasSubtasks())
+        // Material Management (only for leaf tasks)
         const taskId = {{ $task->id }};
         let availableStocks = [];
 
@@ -739,6 +863,7 @@
                 setTimeout(() => $alert.alert('close'), 3000);
             }
         }
+        @endif
     });
 </script>
 @endpush

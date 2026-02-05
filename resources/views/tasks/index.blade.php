@@ -1,5 +1,43 @@
 @extends('layouts.app')
 @section('page_title', 'Tasks')
+
+@push('styles')
+<style>
+    /* Master Task Styling */
+    .master-task-row {
+        background-color: #f8f9fa;
+        border-left: 4px solid #007bff;
+    }
+    .master-task-row td:first-child {
+        font-weight: 600;
+    }
+
+    /* Subtask Styling */
+    .subtask-row {
+        background-color: #fff;
+        border-left: 4px solid #e9ecef;
+    }
+    .subtask-row td {
+        padding-left: 1.5rem !important;
+    }
+    .subtask-row td:first-child {
+        padding-left: 2rem !important;
+    }
+
+    /* Subtask connector styling */
+    .subtask-connector {
+        color: #6c757d;
+        font-family: monospace;
+        margin-right: 5px;
+    }
+
+    /* Visual separation between task groups */
+    .master-task-row td {
+        border-top: 2px solid #dee2e6;
+    }
+</style>
+@endpush
+
 @section('breadcrumb')
     <li class="breadcrumb-item"><a href="{{ route('dashboard.index') }}">Dashboard</a></li>
     <li class="breadcrumb-item active">Tasks</li>
@@ -59,8 +97,8 @@
                 <h3 class="card-title">Tasks List</h3>
             </div>
             <div class="card-body table-responsive">
-                <table class="table table-bordered table-striped">
-                    <thead>
+                <table class="table table-bordered">
+                    <thead class="thead-dark">
                         <tr>
                             <th>Code</th>
                             <th>Task Name</th>
@@ -76,14 +114,29 @@
                     </thead>
                     <tbody>
                         @forelse($tasks as $task)
-                            <tr class="{{ $task->parent_id ? 'bg-light' : '' }}">
-                                <td>
-                                    @if($task->parent_id)
-                                        <span class="text-muted">└</span>
+                            @if(!$task->parent_id)
+                            {{-- Master Task Row --}}
+                            <tr class="master-task-row">
+                                <td class="font-weight-bold">
+                                    @if($task->subtasks_count > 0)
+                                        <i class="fas fa-folder-open text-warning mr-1"></i>
+                                    @else
+                                        <i class="fas fa-tasks text-secondary mr-1"></i>
                                     @endif
                                     {{ $task->code }}
                                 </td>
-                                <td>{{ $task->name }}</td>
+                                <td class="font-weight-bold">{{ $task->name }}</td>
+                            @else
+                            {{-- Subtask Row --}}
+                            <tr class="subtask-row">
+                                <td class="pl-4">
+                                    <span class="subtask-connector">└─</span>
+                                    <span class="text-muted">{{ $task->code }}</span>
+                                </td>
+                                <td class="pl-3">
+                                    <small>{{ $task->name }}</small>
+                                </td>
+                            @endif
                                 <td>
                                     <a href="{{ route('projects.show', $task->project) }}">
                                         {{ $task->project->code ?? '-' }}
