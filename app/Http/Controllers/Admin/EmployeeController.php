@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
+use App\Models\Designation;
 use App\Models\Site;
 use Illuminate\Http\Request;
 
@@ -11,7 +12,7 @@ class EmployeeController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Employee::with('site');
+        $query = Employee::with(['site', 'designation']);
 
         // Filter by site
         if ($request->filled('site_id')) {
@@ -23,9 +24,9 @@ class EmployeeController extends Controller
             $query->where('status', $request->status);
         }
 
-        // Filter by role
-        if ($request->filled('role')) {
-            $query->where('role', $request->role);
+        // Filter by designation
+        if ($request->filled('designation_id')) {
+            $query->where('designation_id', $request->designation_id);
         }
 
         // Search
@@ -40,15 +41,16 @@ class EmployeeController extends Controller
 
         $employees = $query->orderBy('name')->paginate(15);
         $sites = Site::orderBy('name')->get();
-        $roles = Employee::distinct()->pluck('role')->filter();
+        $designations = Designation::active()->orderBy('name')->get();
 
-        return view('employees.index', compact('employees', 'sites', 'roles'));
+        return view('employees.index', compact('employees', 'sites', 'designations'));
     }
 
     public function create()
     {
         $sites = Site::orderBy('name')->get();
-        return view('employees.create', compact('sites'));
+        $designations = Designation::active()->orderBy('name')->get();
+        return view('employees.create', compact('sites', 'designations'));
     }
 
     public function store(Request $request)
@@ -57,7 +59,7 @@ class EmployeeController extends Controller
             'employee_code' => 'required|string|max:50|unique:employees',
             'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:20',
-            'role' => 'required|string|max:100',
+            'designation_id' => 'required|exists:designations,id',
             'hourly_rate' => 'required|numeric|min:0',
             'site_id' => 'nullable|exists:sites,id',
             'status' => 'required|in:active,inactive',
@@ -72,7 +74,8 @@ class EmployeeController extends Controller
     public function edit(Employee $employee)
     {
         $sites = Site::orderBy('name')->get();
-        return view('employees.edit', compact('employee', 'sites'));
+        $designations = Designation::active()->orderBy('name')->get();
+        return view('employees.edit', compact('employee', 'sites', 'designations'));
     }
 
     public function update(Request $request, Employee $employee)
@@ -81,7 +84,7 @@ class EmployeeController extends Controller
             'employee_code' => 'required|string|max:50|unique:employees,employee_code,' . $employee->id,
             'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:20',
-            'role' => 'required|string|max:100',
+            'designation_id' => 'required|exists:designations,id',
             'hourly_rate' => 'required|numeric|min:0',
             'site_id' => 'nullable|exists:sites,id',
             'status' => 'required|in:active,inactive',

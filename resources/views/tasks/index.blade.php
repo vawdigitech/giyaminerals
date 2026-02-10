@@ -83,9 +83,11 @@
                     <div class="col-md-3">
                         <button type="submit" class="btn btn-primary">Filter</button>
                         <a href="{{ route('tasks.index') }}" class="btn btn-secondary">Reset</a>
+                        @can('tasks.create')
                         <a href="{{ route('tasks.create') }}" class="btn btn-success">
                             <i class="fas fa-plus"></i> New Task
                         </a>
+                        @endcan
                     </div>
                 </form>
             </div>
@@ -171,9 +173,11 @@
                                     <a href="{{ route('tasks.show', $task) }}" class="btn btn-sm btn-info" title="View">
                                         <i class="fas fa-eye"></i>
                                     </a>
+                                    @can('tasks.edit')
                                     <a href="{{ route('tasks.edit', $task) }}" class="btn btn-sm btn-warning" title="Edit">
                                         <i class="fas fa-edit"></i>
                                     </a>
+                                    @endcan
                                 </td>
                             </tr>
                         @empty

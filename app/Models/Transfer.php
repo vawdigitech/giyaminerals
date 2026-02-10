@@ -18,12 +18,17 @@ class Transfer extends Model
      */
     protected $fillable = [
         'product_id',
+        'task_id',
+        'task_stock_usage_id',
         'from_type',
         'from_id',
         'to_type',
         'to_id',
         'quantity',
-        'transfer_date'
+        'transfer_date',
+        'transfer_type',
+        'notes',
+        'created_by'
     ];
 
     public function product()
@@ -47,5 +52,20 @@ class Transfer extends Model
         } else {
             return Site::find($this->to_id)?->name ?? 'Unknown Site';
         }
+    }
+
+    public function task()
+    {
+        return $this->belongsTo(Task::class);
+    }
+
+    public function taskStockUsage()
+    {
+        return $this->belongsTo(TaskStockUsage::class, 'task_stock_usage_id');
+    }
+
+    public function createdBy()
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 }

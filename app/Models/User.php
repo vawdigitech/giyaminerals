@@ -7,11 +7,12 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasApiTokens;
+    use HasFactory, Notifiable, HasApiTokens, HasRoles;
 
     /**
      * The attributes that are mass assignable.
@@ -22,7 +23,6 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role',
         'site_id',
     ];
 
@@ -31,14 +31,12 @@ class User extends Authenticatable
         return $this->belongsTo(Site::class);
     }
 
-    public function isAdmin()
+    /**
+     * Check if the user has the supervisor role.
+     */
+    public function isSupervisor(): bool
     {
-        return $this->role === 'admin';
-    }
-
-    public function isSupervisor()
-    {
-        return $this->role === 'supervisor';
+        return $this->hasRole('supervisor');
     }
 
     /**

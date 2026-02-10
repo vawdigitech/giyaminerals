@@ -6,7 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Task;
 use App\Models\Stock;
 use App\Models\TaskStockUsage;
+use App\Models\Transfer;
+use App\Models\Warehouse;
+use App\Models\Site;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class TaskStockUsageController extends Controller
 {
@@ -37,6 +41,7 @@ class TaskStockUsageController extends Controller
                     'product_id' => $stock->product_id,
                     'product_name' => $stock->product->name ?? 'Unknown',
                     'product_unit' => $stock->product->unit ?? '',
+                    'unit_price' => $stock->product->unit_price ?? 0,
                     'category' => $stock->product->category->name ?? 'Uncategorized',
                     'available_qty' => $stock->balance,
                 ];
@@ -168,6 +173,156 @@ class TaskStockUsageController extends Controller
                 'usages' => $usages,
                 'total_material_cost' => $usages->sum('total_cost'),
                 'site_name' => $task->project->site->name ?? 'No Site',
+            ],
+        ]);
+    }
+
+    /**
+     * Return material from a task back to inventory
+     */
+    public function returnMaterial(Request $request, Task $task, TaskStockUsage $usage)
+    {
+        // Verify the usage belongs to this task
+        if ($usage->task_id !== $task->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This material usage does not belong to this task',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'quantity_to_return' => 'required|numeric|min:0.01',
+            'destination_type' => 'required|in:warehouse,site',
+            'destination_id' => 'required|integer',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        // Validate quantity doesn't exceed current usage
+        if ($validated['quantity_to_return'] > $usage->quantity) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot return more than the used quantity. Available: ' . $usage->quantity,
+            ], 422);
+        }
+
+        // Validate destination exists
+        if ($validated['destination_type'] === 'warehouse') {
+            $destination = Warehouse::find($validated['destination_id']);
+        } else {
+            $destination = Site::find($validated['destination_id']);
+        }
+
+        if (!$destination) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid destination selected',
+            ], 422);
+        }
+
+        DB::beginTransaction();
+        try {
+            $sourceStock = $usage->stock;
+            $project = $task->project;
+
+            // Create transfer record for the return
+            Transfer::create([
+                'product_id' => $usage->product_id,
+                'task_id' => $task->id,
+                'task_stock_usage_id' => $usage->id,
+                'from_type' => 'site',
+                'from_id' => $project->site_id,
+                'to_type' => $validated['destination_type'],
+                'to_id' => $validated['destination_id'],
+                'quantity' => $validated['quantity_to_return'],
+                'transfer_date' => now(),
+                'transfer_type' => 'return',
+                'notes' => $validated['notes'] ?? 'Material returned from task',
+                'created_by' => auth()->id(),
+            ]);
+
+            // Update source stock (decrease transferred_quantity since material is coming back)
+            if ($sourceStock) {
+                $sourceStock->decrement('transferred_quantity', $validated['quantity_to_return']);
+                $sourceStock->update(['last_updated_at' => now()]);
+            }
+
+            // Update or create destination stock
+            $destinationStock = Stock::firstOrCreate([
+                'product_id' => $usage->product_id,
+                'location_type' => $validated['destination_type'],
+                'location_id' => $validated['destination_id'],
+            ], [
+                'received_quantity' => 0,
+                'transferred_quantity' => 0,
+                'last_updated_at' => now(),
+            ]);
+            $destinationStock->increment('received_quantity', $validated['quantity_to_return']);
+            $destinationStock->update(['last_updated_at' => now()]);
+
+            // Update or delete the TaskStockUsage
+            $remainingQuantity = $usage->quantity - $validated['quantity_to_return'];
+            if ($remainingQuantity <= 0) {
+                // Delete the usage record directly from DB to avoid triggering the deleted event
+                // which would restore stock (we handle stock updates manually above)
+                DB::table('task_stock_usages')->where('id', $usage->id)->delete();
+            } else {
+                // Update the usage with reduced quantity
+                $usage->update([
+                    'quantity' => $remainingQuantity,
+                    'total_cost' => $remainingQuantity * $usage->unit_price,
+                ]);
+            }
+
+            // Recalculate task costs
+            $task->recalculateCosts();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Material returned successfully. ' . $validated['quantity_to_return'] . ' units transferred to ' . $destination->name,
+                'data' => [
+                    'remaining_quantity' => $remainingQuantity > 0 ? $remainingQuantity : 0,
+                    'deleted' => $remainingQuantity <= 0,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to return material: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Get available destinations (warehouses and sites) for material return
+     */
+    public function getReturnDestinations()
+    {
+        $warehouses = Warehouse::all()->map(function ($w) {
+            return [
+                'type' => 'warehouse',
+                'id' => $w->id,
+                'name' => $w->name,
+                'label' => 'Warehouse: ' . $w->name,
+            ];
+        });
+
+        $sites = Site::all()->map(function ($s) {
+            return [
+                'type' => 'site',
+                'id' => $s->id,
+                'name' => $s->name,
+                'label' => 'Site: ' . $s->name,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'warehouses' => $warehouses,
+                'sites' => $sites,
             ],
         ]);
     }

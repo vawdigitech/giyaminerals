@@ -13,8 +13,10 @@
                     <div class="card-header">
                         <h3 class="card-title">Client List</h3>
                         <div class="card-tools">
+                            @can('sites.create')
                             <a href="{{ route('sites.create') }}" class="btn btn-primary btn-sm">Add
                                 Client</a>
+                            @endcan
                         </div>
                     </div>
                     <div class="card-body">
@@ -32,14 +34,18 @@
                                         <td>{{ $site->name }}</td>
                                         <td>{{ $site->location }}</td>
                                         <td>
+                                            @can('sites.edit')
                                             <a href="{{ route('sites.edit', $site->id) }}"
                                                 class="btn btn-sm btn-info">
                                                 <i class="fas fa-edit"></i>
                                             </a>
+                                            @endcan
+                                            @can('sites.delete')
                                             <button type="button" class="btn btn-sm btn-danger delete-site"
                                                 data-id="{{ $site->id }}" data-name="{{ $site->name }}">
                                                 <i class="fas fa-trash-alt"></i>
                                             </button>
+                                            @endcan
                                         </td>
 
                                     </tr>

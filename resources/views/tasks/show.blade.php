@@ -415,7 +415,7 @@
                                     <th>Total Cost</th>
                                     <th>Notes</th>
                                     <th>Date</th>
-                                    <th width="50"></th>
+                                    <th width="100">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="materialsTableBody">
@@ -431,6 +431,16 @@
                                         <td>{{ Str::limit($usage->notes, 30) ?? '-' }}</td>
                                         <td>{{ $usage->used_at ? $usage->used_at->format('M d, Y') : '-' }}</td>
                                         <td>
+                                            @if($usage->quantity > 0)
+                                            <button type="button" class="btn btn-xs btn-info btn-return-material"
+                                                data-usage-id="{{ $usage->id }}"
+                                                data-product-name="{{ $usage->product->name ?? 'this material' }}"
+                                                data-product-unit="{{ $usage->product->unit ?? '' }}"
+                                                data-quantity="{{ $usage->quantity }}"
+                                                title="Return material">
+                                                <i class="fas fa-undo"></i>
+                                            </button>
+                                            @endif
                                             <button type="button" class="btn btn-xs btn-danger btn-delete-material"
                                                 data-usage-id="{{ $usage->id }}"
                                                 data-product-name="{{ $usage->product->name ?? 'this material' }}"
@@ -571,6 +581,64 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Return Material Modal -->
+                <div class="modal fade" id="returnMaterialModal" tabindex="-1" role="dialog">
+                    <div class="modal-dialog" role="document">
+                        <div class="modal-content">
+                            <div class="modal-header bg-info text-white">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-undo mr-1"></i>
+                                    Return Material to Inventory
+                                </h5>
+                                <button type="button" class="close text-white" data-dismiss="modal">
+                                    <span>&times;</span>
+                                </button>
+                            </div>
+                            <form id="returnMaterialForm">
+                                <div class="modal-body">
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Returning <strong id="returnProductName"></strong>
+                                        <br><small>Available to return: <span id="returnAvailableQty"></span> <span id="returnProductUnit"></span></small>
+                                    </div>
+
+                                    <input type="hidden" id="returnUsageId">
+
+                                    <div class="form-group">
+                                        <label for="returnQuantity">Quantity to Return <span class="text-danger">*</span></label>
+                                        <div class="input-group">
+                                            <input type="number" step="0.01" min="0.01" class="form-control"
+                                                id="returnQuantity" name="quantity_to_return" required placeholder="0.00">
+                                            <div class="input-group-append">
+                                                <span class="input-group-text" id="returnUnitLabel">-</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="returnDestination">Return To <span class="text-danger">*</span></label>
+                                        <select class="form-control" id="returnDestination" name="destination" required>
+                                            <option value="">-- Loading destinations... --</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="returnNotes">Notes (Optional)</label>
+                                        <textarea class="form-control" id="returnNotes" name="notes" rows="2"
+                                            placeholder="Reason for return..."></textarea>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                                    <button type="submit" class="btn btn-info" id="confirmReturnBtn">
+                                        <i class="fas fa-undo mr-1"></i> Return Material
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
                 @endif
 
                 <!-- Progress Photos -->
@@ -648,6 +716,7 @@
                         $select.append(`<option value="${stock.id}"
                             data-available="${stock.available_qty}"
                             data-unit="${stock.product_unit}"
+                            data-unit-price="${stock.unit_price || 0}"
                             data-name="${stock.product_name}">
                             ${stock.product_name} (${stock.category}) - Available: ${stock.available_qty} ${stock.product_unit}
                         </option>`);
@@ -665,6 +734,7 @@
             const $selected = $(this).find(':selected');
             const available = $selected.data('available') || 0;
             const unit = $selected.data('unit') || '';
+            const unitPrice = $selected.data('unit-price') || 0;
 
             $('#unitLabel').text(unit || '-');
             $('#availableQtyHint').html(
@@ -673,6 +743,14 @@
                     : ''
             );
             $('#materialQty').attr('max', available);
+
+            // Auto-fill unit price from product
+            if (unitPrice > 0) {
+                $('#unitPrice').val(parseFloat(unitPrice).toFixed(2));
+                calculateTotal();
+            } else {
+                $('#unitPrice').val('');
+            }
         });
 
         // Calculate total cost
@@ -748,6 +826,14 @@
                     <td>${data.notes || '-'}</td>
                     <td>${data.used_at}</td>
                     <td>
+                        <button type="button" class="btn btn-xs btn-info btn-return-material"
+                            data-usage-id="${data.id}"
+                            data-product-name="${data.product_name}"
+                            data-product-unit="${data.product_unit}"
+                            data-quantity="${data.quantity}"
+                            title="Return material">
+                            <i class="fas fa-undo"></i>
+                        </button>
                         <button type="button" class="btn btn-xs btn-danger btn-delete-material"
                             data-usage-id="${data.id}"
                             data-product-name="${data.product_name}"
@@ -844,6 +930,140 @@
                 }
             });
         }
+
+        // Return Material functionality
+        let returnUsageId = null;
+        let returnDestinations = null;
+
+        // Load return destinations when modal opens
+        $('#returnMaterialModal').on('show.bs.modal', function() {
+            if (!returnDestinations) {
+                loadReturnDestinations();
+            }
+        });
+
+        function loadReturnDestinations() {
+            const $select = $('#returnDestination');
+            $select.html('<option value="">-- Loading... --</option>');
+
+            $.ajax({
+                url: '{{ route("materials.return-destinations") }}',
+                method: 'GET',
+                success: function(response) {
+                    returnDestinations = response.data;
+                    $select.empty();
+                    $select.append('<option value="">-- Select destination --</option>');
+
+                    if (returnDestinations.warehouses && returnDestinations.warehouses.length > 0) {
+                        const warehouseGroup = $('<optgroup label="Warehouses"></optgroup>');
+                        returnDestinations.warehouses.forEach(function(w) {
+                            warehouseGroup.append(`<option value="warehouse:${w.id}">${w.name}</option>`);
+                        });
+                        $select.append(warehouseGroup);
+                    }
+
+                    if (returnDestinations.sites && returnDestinations.sites.length > 0) {
+                        const siteGroup = $('<optgroup label="Sites"></optgroup>');
+                        returnDestinations.sites.forEach(function(s) {
+                            siteGroup.append(`<option value="site:${s.id}">${s.name}</option>`);
+                        });
+                        $select.append(siteGroup);
+                    }
+                },
+                error: function() {
+                    $select.html('<option value="">-- Error loading destinations --</option>');
+                }
+            });
+        }
+
+        // Show return modal
+        $(document).on('click', '.btn-return-material', function() {
+            returnUsageId = $(this).data('usage-id');
+            const productName = $(this).data('product-name');
+            const productUnit = $(this).data('product-unit');
+            const quantity = $(this).data('quantity');
+
+            $('#returnUsageId').val(returnUsageId);
+            $('#returnProductName').text(productName);
+            $('#returnProductUnit').text(productUnit);
+            $('#returnAvailableQty').text(parseFloat(quantity).toFixed(2));
+            $('#returnUnitLabel').text(productUnit || '-');
+            $('#returnQuantity').attr('max', quantity).val('');
+            $('#returnNotes').val('');
+
+            $('#returnMaterialModal').modal('show');
+        });
+
+        // Submit return form
+        $('#returnMaterialForm').on('submit', function(e) {
+            e.preventDefault();
+
+            const usageId = $('#returnUsageId').val();
+            const destination = $('#returnDestination').val();
+            if (!destination) {
+                showToast('error', 'Please select a destination');
+                return;
+            }
+
+            const [destType, destId] = destination.split(':');
+            const $btn = $('#confirmReturnBtn');
+            const originalText = $btn.html();
+            $btn.html('<i class="fas fa-spinner fa-spin"></i> Processing...').prop('disabled', true);
+
+            $.ajax({
+                url: `{{ url('tasks') }}/${taskId}/materials/${usageId}/return`,
+                method: 'POST',
+                data: {
+                    _token: '{{ csrf_token() }}',
+                    quantity_to_return: $('#returnQuantity').val(),
+                    destination_type: destType,
+                    destination_id: destId,
+                    notes: $('#returnNotes').val()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $('#returnMaterialModal').modal('hide');
+
+                        if (response.data.deleted) {
+                            // Remove the row entirely
+                            $(`tr[data-usage-id="${usageId}"]`).fadeOut(300, function() {
+                                $(this).remove();
+                                if ($('#materialsTableBody tr').length === 0) {
+                                    $('#materialsTableBody').html(
+                                        '<tr id="noMaterialsRow"><td colspan="7" class="text-center text-muted">No materials used yet.</td></tr>'
+                                    );
+                                }
+                            });
+                        } else {
+                            // Update the quantity in the row
+                            const $row = $(`tr[data-usage-id="${usageId}"]`);
+                            const newQty = parseFloat(response.data.remaining_quantity);
+                            $row.find('td:eq(1)').text(newQty.toFixed(2));
+                            // Update the return button's data-quantity
+                            $row.find('.btn-return-material').data('quantity', newQty);
+                        }
+
+                        refreshTotalCost();
+                        showToast('success', response.message);
+                    } else {
+                        showToast('error', response.message || 'Failed to return material');
+                    }
+                },
+                error: function(xhr) {
+                    const msg = xhr.responseJSON?.message || 'An error occurred';
+                    showToast('error', msg);
+                },
+                complete: function() {
+                    $btn.html(originalText).prop('disabled', false);
+                }
+            });
+        });
+
+        // Reset return modal state when hidden
+        $('#returnMaterialModal').on('hidden.bs.modal', function() {
+            returnUsageId = null;
+            $('#returnMaterialForm')[0].reset();
+        });
 
         function showToast(type, message) {
             // Using AdminLTE's toastr if available, otherwise alert

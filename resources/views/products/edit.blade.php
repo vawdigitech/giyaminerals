@@ -22,6 +22,11 @@
         <input type="text" name="unit" value="{{ old('unit', $product->unit) }}" class="form-control" required>
       </div>
       <div class="form-group">
+        <label for="unit_price">Unit Price (Optional)</label>
+        <input type="number" step="0.01" min="0" name="unit_price" value="{{ old('unit_price', $product->unit_price) }}" class="form-control" placeholder="Enter default unit price">
+        <small class="text-muted">This price will be auto-filled when adding material to tasks</small>
+      </div>
+      <div class="form-group">
         <label for="category_id">Category</label>
         <select name="category_id" class="form-control" required>
           <option value="">Select Category</option>

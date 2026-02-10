@@ -1,8 +1,8 @@
 @extends('layouts.app')
-@section('page_title', 'Employees')
+@section('page_title', 'Designations')
 @section('breadcrumb')
     <li class="breadcrumb-item"><a href="{{ route('dashboard.index') }}">Dashboard</a></li>
-    <li class="breadcrumb-item active">Employees</li>
+    <li class="breadcrumb-item active">Designations</li>
 @endsection
 @section('content')
 <section class="content">
@@ -10,40 +10,20 @@
         <!-- Filters -->
         <div class="card card-outline card-primary mb-3">
             <div class="card-body">
-                <form method="GET" action="{{ route('employees.index') }}" class="row g-3">
-                    <div class="col-md-3">
-                        <select name="site_id" class="form-control">
-                            <option value="">All Sites</option>
-                            @foreach($sites as $site)
-                                <option value="{{ $site->id }}" {{ request('site_id') == $site->id ? 'selected' : '' }}>
-                                    {{ $site->name }}
-                                </option>
-                            @endforeach
-                        </select>
+                <form method="GET" action="{{ route('designations.index') }}" class="row g-3">
+                    <div class="col-md-4">
+                        <input type="text" name="search" class="form-control" placeholder="Search by name or code..." value="{{ request('search') }}">
                     </div>
-                    <div class="col-md-2">
+                    <div class="col-md-3">
                         <select name="status" class="form-control">
                             <option value="">All Status</option>
                             <option value="active" {{ request('status') == 'active' ? 'selected' : '' }}>Active</option>
                             <option value="inactive" {{ request('status') == 'inactive' ? 'selected' : '' }}>Inactive</option>
                         </select>
                     </div>
-                    <div class="col-md-2">
-                        <select name="designation_id" class="form-control">
-                            <option value="">All Designations</option>
-                            @foreach($designations as $designation)
-                                <option value="{{ $designation->id }}" {{ request('designation_id') == $designation->id ? 'selected' : '' }}>
-                                    {{ $designation->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
                     <div class="col-md-3">
-                        <input type="text" name="search" class="form-control" placeholder="Search..." value="{{ request('search') }}">
-                    </div>
-                    <div class="col-md-2">
                         <button type="submit" class="btn btn-primary">Filter</button>
-                        <a href="{{ route('employees.index') }}" class="btn btn-secondary">Reset</a>
+                        <a href="{{ route('designations.index') }}" class="btn btn-secondary">Reset</a>
                     </div>
                 </form>
             </div>
@@ -53,11 +33,11 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h3 class="card-title">Employee List</h3>
+                        <h3 class="card-title">Designation List</h3>
                         <div class="card-tools">
-                            @can('employees.create')
-                            <a href="{{ route('employees.create') }}" class="btn btn-primary btn-sm">
-                                <i class="fas fa-plus"></i> Add Employee
+                            @can('designations.create')
+                            <a href="{{ route('designations.create') }}" class="btn btn-primary btn-sm">
+                                <i class="fas fa-plus"></i> Add Designation
                             </a>
                             @endcan
                         </div>
@@ -68,41 +48,36 @@
                                 <tr>
                                     <th>Code</th>
                                     <th>Name</th>
-                                    <th>Designation</th>
-                                    <th>Phone</th>
-                                    <th>Site</th>
-                                    <th>Hourly Rate</th>
+                                    <th>Description</th>
+                                    <th>Employees</th>
                                     <th>Status</th>
-                                    <th style="width: 150px;">Actions</th>
+                                    <th style="width: 120px;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @forelse($employees as $employee)
+                                @forelse($designations as $designation)
                                     <tr>
-                                        <td>{{ $employee->employee_code }}</td>
-                                        <td>{{ $employee->name }}</td>
-                                        <td>{{ $employee->designation->name ?? '-' }}</td>
-                                        <td>{{ $employee->phone ?? '-' }}</td>
-                                        <td>{{ $employee->site->name ?? '-' }}</td>
-                                        <td>${{ number_format($employee->hourly_rate, 2) }}</td>
+                                        <td><code>{{ $designation->code }}</code></td>
+                                        <td>{{ $designation->name }}</td>
+                                        <td>{{ Str::limit($designation->description, 50) ?? '-' }}</td>
                                         <td>
-                                            <span class="badge badge-{{ $employee->status === 'active' ? 'success' : 'secondary' }}">
-                                                {{ ucfirst($employee->status) }}
+                                            <span class="badge badge-info">{{ $designation->employees_count }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-{{ $designation->is_active ? 'success' : 'secondary' }}">
+                                                {{ $designation->is_active ? 'Active' : 'Inactive' }}
                                             </span>
                                         </td>
                                         <td>
-                                            <a href="{{ route('employees.show', $employee) }}" class="btn btn-sm btn-info" title="View">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
-                                            @can('employees.edit')
-                                            <a href="{{ route('employees.edit', $employee) }}" class="btn btn-sm btn-warning" title="Edit">
+                                            @can('designations.edit')
+                                            <a href="{{ route('designations.edit', $designation) }}" class="btn btn-sm btn-warning" title="Edit">
                                                 <i class="fas fa-edit"></i>
                                             </a>
                                             @endcan
-                                            @can('employees.delete')
+                                            @can('designations.delete')
                                             <button type="button" class="btn btn-sm btn-danger" data-toggle="modal"
-                                                data-target="#confirmDeleteModal" data-id="{{ $employee->id }}"
-                                                data-name="{{ $employee->name }}" title="Delete">
+                                                data-target="#confirmDeleteModal" data-id="{{ $designation->id }}"
+                                                data-name="{{ $designation->name }}" data-count="{{ $designation->employees_count }}" title="Delete">
                                                 <i class="fas fa-trash-alt"></i>
                                             </button>
                                             @endcan
@@ -110,13 +85,13 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="8" class="text-center">No employees found.</td>
+                                        <td colspan="6" class="text-center">No designations found.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
                         </table>
                         <div class="mt-3">
-                            {{ $employees->withQueryString()->links() }}
+                            {{ $designations->withQueryString()->links() }}
                         </div>
                     </div>
                 </div>
@@ -134,14 +109,17 @@
                 <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
             </div>
             <div class="modal-body">
-                Are you sure you want to delete <strong id="employeeName"></strong>?
+                <p>Are you sure you want to delete <strong id="designationName"></strong>?</p>
+                <p id="warningMessage" class="text-danger" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i> This designation has employees assigned. You must reassign them first.
+                </p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                 <form method="POST" id="deleteForm">
                     @csrf
                     @method('DELETE')
-                    <button type="submit" class="btn btn-danger">Delete</button>
+                    <button type="submit" class="btn btn-danger" id="deleteBtn">Delete</button>
                 </form>
             </div>
         </div>
@@ -155,8 +133,18 @@
         const button = $(event.relatedTarget);
         const id = button.data('id');
         const name = button.data('name');
-        $(this).find('#employeeName').text(name);
-        $(this).find('#deleteForm').attr('action', '/employees/' + id);
+        const count = button.data('count');
+
+        $(this).find('#designationName').text(name);
+        $(this).find('#deleteForm').attr('action', '/designations/' + id);
+
+        if (count > 0) {
+            $(this).find('#warningMessage').show();
+            $(this).find('#deleteBtn').prop('disabled', true);
+        } else {
+            $(this).find('#warningMessage').hide();
+            $(this).find('#deleteBtn').prop('disabled', false);
+        }
     });
 
     @if(session('success'))

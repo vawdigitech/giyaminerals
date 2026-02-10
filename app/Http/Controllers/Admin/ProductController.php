@@ -27,9 +27,10 @@ class ProductController extends Controller
         $request->validate([
             'name' => 'required',
             'unit' => 'required',
+            'unit_price' => 'nullable|numeric|min:0',
             'category_id' => 'required|exists:product_categories,id'
         ]);
-        Product::create($request->only('name', 'unit', 'category_id'));
+        Product::create($request->only('name', 'unit', 'unit_price', 'category_id'));
 
         return redirect()->route('products.index')->with('success', 'Product added');
     }
@@ -45,10 +46,11 @@ class ProductController extends Controller
         $request->validate([
             'name' => 'required',
             'unit' => 'required',
+            'unit_price' => 'nullable|numeric|min:0',
             'category_id' => 'required|exists:product_categories,id'
         ]);
 
-        $product->update($request->only('name', 'unit', 'category_id'));
+        $product->update($request->only('name', 'unit', 'unit_price', 'category_id'));
 
         return redirect()->route('products.index')->with('success', 'Product updated');
     }

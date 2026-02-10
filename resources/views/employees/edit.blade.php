@@ -55,10 +55,18 @@
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        <label for="role">Role <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control @error('role') is-invalid @enderror"
-                                            id="role" name="role" value="{{ old('role', $employee->role) }}" required>
-                                        @error('role')
+                                        <label for="designation_id">Designation <span class="text-danger">*</span></label>
+                                        <select class="form-control @error('designation_id') is-invalid @enderror"
+                                            id="designation_id" name="designation_id" required>
+                                            <option value="">-- Select Designation --</option>
+                                            @foreach($designations as $designation)
+                                                <option value="{{ $designation->id }}"
+                                                    {{ old('designation_id', $employee->designation_id) == $designation->id ? 'selected' : '' }}>
+                                                    {{ $designation->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        @error('designation_id')
                                             <span class="invalid-feedback">{{ $message }}</span>
                                         @enderror
                                     </div>

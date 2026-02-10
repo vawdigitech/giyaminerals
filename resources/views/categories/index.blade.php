@@ -9,7 +9,9 @@
     <div class="card-header">
         <h3 class="card-title">Item Categories</h3>
         <div class="card-tools">
+            @can('inventory.create')
             <a href="{{ route('categories.create') }}" class="btn btn-primary btn-sm">Add Category</a>
+            @endcan
         </div>
     </div>
     <div class="card-body">
@@ -25,8 +27,11 @@
                     <tr>
                         <td>{{ $category->name }}</td>
                         <td>
+                            @can('inventory.edit')
                             <a href="{{ route('categories.edit', $category->id) }}"
                                 class="btn btn-sm btn-info">Edit</a>
+                            @endcan
+                            @can('inventory.delete')
                             <form method="POST"
                                 action="{{ route('categories.destroy', $category->id) }}"
                                 style="display:inline-block">
@@ -36,6 +41,7 @@
                                     Delete
                                 </button>
                             </form>
+                            @endcan
                         </td>
                     </tr>
                 @endforeach

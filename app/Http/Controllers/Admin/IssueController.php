@@ -72,7 +72,7 @@ class IssueController extends Controller
     public function show(SiteIssue $issue)
     {
         $issue->load(['site', 'task.project', 'reportedBy', 'assignedTo']);
-        $supervisors = User::where('role', 'supervisor')->orderBy('name')->get();
+        $supervisors = User::role('supervisor')->orderBy('name')->get();
 
         return view('issues.show', compact('issue', 'supervisors'));
     }

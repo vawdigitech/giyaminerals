@@ -40,6 +40,11 @@
                   <option value="nos">Nos</option>
                 </select>
               </div>
+              <div class="form-group">
+                <label for="unit_price">Unit Price (Optional)</label>
+                <input type="number" step="0.01" min="0" class="form-control" name="unit_price" placeholder="Enter default unit price">
+                <small class="text-muted">This price will be auto-filled when adding material to tasks</small>
+              </div>
             </div>
             <div class="card-footer">
               <button type="submit" class="btn btn-success">Save</button>

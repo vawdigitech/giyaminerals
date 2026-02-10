@@ -10,7 +10,7 @@ class Employee extends Model
         'employee_code',
         'name',
         'phone',
-        'role',
+        'designation_id',
         'employment_type',
         'hourly_rate',
         'photo',
@@ -25,6 +25,11 @@ class Employee extends Model
     public function site()
     {
         return $this->belongsTo(Site::class);
+    }
+
+    public function designation()
+    {
+        return $this->belongsTo(Designation::class);
     }
 
     public function attendances()

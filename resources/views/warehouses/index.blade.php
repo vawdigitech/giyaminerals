@@ -5,8 +5,10 @@
     <div class="card-header">
         <h3 class="card-title">All Warehouses</h3>
         <div class="card-tools">
+            @can('warehouses.create')
             <a href="{{ route('warehouses.create') }}" class="btn btn-primary btn-sm">Add
                 Warehouse</a>
+            @endcan
         </div>
     </div>
     <div class="card-body">
@@ -24,8 +26,11 @@
                         <td>{{ $warehouse->name }}</td>
                         <td>{{ $warehouse->location }}</td>
                         <td>
+                            @can('warehouses.edit')
                             <a href="{{ route('warehouses.edit', $warehouse->id) }}"
                                 class="btn btn-sm btn-info">Edit</a>
+                            @endcan
+                            @can('warehouses.delete')
                             <form method="POST"
                                 action="{{ route('warehouses.destroy', $warehouse->id) }}"
                                 style="display:inline-block">
@@ -35,6 +40,7 @@
                                     Delete
                                 </button>
                             </form>
+                            @endcan
                         </td>
                     </tr>
                 @endforeach

@@ -17,7 +17,12 @@ class Product extends Model
     protected $fillable = [
         'name',
         'unit',
+        'unit_price',
         'category_id'
+    ];
+
+    protected $casts = [
+        'unit_price' => 'decimal:2',
     ];
 
     public function category()

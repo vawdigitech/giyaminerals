@@ -151,9 +151,11 @@
                                             <a href="{{ route('projects.show', $project) }}" class="btn btn-sm btn-info" title="View">
                                                 <i class="fas fa-eye"></i>
                                             </a>
+                                            @can('projects.edit')
                                             <a href="{{ route('projects.edit', $project) }}" class="btn btn-sm btn-warning" title="Edit">
                                                 <i class="fas fa-edit"></i>
                                             </a>
+                                            @endcan
                                             <a href="{{ route('tasks.index', ['project_id' => $project->id]) }}" class="btn btn-sm btn-success" title="Tasks">
                                                 <i class="fas fa-tasks"></i>
                                             </a>

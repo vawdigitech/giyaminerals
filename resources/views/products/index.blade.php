@@ -13,8 +13,10 @@
                     <div class="card-header">
                         <h3 class="card-title">Item List</h3>
                         <div class="card-tools">
+                            @can('inventory.create')
                             <a href="{{ route('products.create') }}"
                                 class="btn btn-primary btn-sm">Add Item</a>
+                            @endcan
                         </div>
                     </div>
                     <div class="card-body">
@@ -24,6 +26,7 @@
                                     <th>Name</th>
                                     <th>Category</th>
                                     <th>Unit</th>
+                                    <th>Unit Price</th>
                                     <th style="width: 120px;">Actions</th>
                                 </tr>
                             </thead>
@@ -33,11 +36,15 @@
                                         <td>{{ $product->name }}</td>
                                         <td>{{ $product->category->name ?? '-' }}</td>
                                         <td>{{ $product->unit }}</td>
+                                        <td>{{ $product->unit_price ? number_format($product->unit_price, 2) : '-' }}</td>
                                         <td>
+                                            @can('inventory.edit')
                                             <a href="{{ route('products.edit', $product->id) }}"
                                                 class="btn btn-sm btn-info">
                                                 <i class="fas fa-edit"></i>
                                             </a>
+                                            @endcan
+                                            @can('inventory.delete')
                                             <form method="POST" style="display:inline-block;">
                                                 @csrf
                                                 @method('DELETE')
@@ -47,7 +54,7 @@
                                                     <i class="fas fa-trash-alt"></i>
                                                 </button>
                                             </form>
-
+                                            @endcan
                                         </td>
 
                                     </tr>

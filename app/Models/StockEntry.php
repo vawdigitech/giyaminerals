@@ -14,7 +14,7 @@ class StockEntry extends Model
      *
      * @var list<string>
      */
-    protected $fillable = ['product_id','location_type','location_id','quantity','entry_date','reference','created_by'];
+    protected $fillable = ['product_id','location_type','location_id','task_id','quantity','entry_date','reference','created_by'];
     
     public function product()
     {
@@ -22,6 +22,8 @@ class StockEntry extends Model
     }
 
     public function user() { return $this->belongsTo(User::class, 'created_by'); }
+
+    public function task() { return $this->belongsTo(Task::class); }
 
     public function getLocationNameAttribute() {
     return $this->location_type === 'warehouse'

@@ -26,9 +26,11 @@
         </div>
     </form>
     <div class="text-right">
+        @can('transfers.create')
         <a href="{{ route('transfers.create') }}" class="btn btn-success">
             <i class="fas fa-exchange-alt"></i> New Transfer
         </a>
+        @endcan
     </div>
 </div>
 
