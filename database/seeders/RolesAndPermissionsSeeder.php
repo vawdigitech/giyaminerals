@@ -18,6 +18,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $modules = [
             'employees' => ['view', 'create', 'edit', 'delete'],
             'attendance' => ['view', 'create', 'edit', 'delete', 'export'],
+            'salary' => ['view', 'manage'],
             'projects' => ['view', 'create', 'edit', 'delete'],
             'tasks' => ['view', 'create', 'edit', 'delete'],
             'inventory' => ['view', 'create', 'edit', 'delete'],
@@ -30,6 +31,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'designations' => ['view', 'create', 'edit', 'delete'],
             'roles' => ['view', 'create', 'edit', 'delete'],
             'users' => ['view', 'create', 'edit', 'delete'],
+            'settings' => ['view', 'edit'],
         ];
 
         // Create permissions
@@ -60,6 +62,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $supervisorPermissions = [
             'employees.view',
             'attendance.view', 'attendance.create', 'attendance.edit', 'attendance.export',
+            'salary.view',
             'projects.view',
             'tasks.view', 'tasks.create', 'tasks.edit',
             'inventory.view',

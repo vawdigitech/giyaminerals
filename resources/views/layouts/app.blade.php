@@ -24,6 +24,7 @@
     <!-- Theme style -->
     <link rel="stylesheet" href="{{ asset('template/dist/css/adminlte.min.css') }}">
     <link rel="stylesheet" href="{{ asset('template/plugins/toastr/toastr.min.css') }}">
+    <link rel="stylesheet" href="{{ asset('template/plugins/sweetalert2-theme-bootstrap-4/bootstrap-4.min.css') }}">
     @stack('styles')
 </head>
 
@@ -116,6 +117,7 @@
     <script src="{{ asset('template/plugins/datatables-buttons/js/buttons.colVis.min.js') }}">
     </script>
     <script src="{{ asset('template/plugins/toastr/toastr.min.js') }}"></script>
+    <script src="{{ asset('template/plugins/sweetalert2/sweetalert2.min.js') }}"></script>
 
     <!-- Init all .table instances as DataTables -->
     @stack('scripts')

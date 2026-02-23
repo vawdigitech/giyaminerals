@@ -56,14 +56,43 @@ class EmployeeController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'employee_code' => 'required|string|max:50|unique:employees',
             'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:20',
             'designation_id' => 'required|exists:designations,id',
-            'hourly_rate' => 'required|numeric|min:0',
+            'employment_type' => 'required|in:permanent,contract,temporary',
+            'daily_rate' => 'required|numeric|min:0',
+            'working_hours' => 'required|numeric|min:1|max:24',
+            'photo' => 'nullable|image|max:5120', // 5MB max
             'site_id' => 'nullable|exists:sites,id',
             'status' => 'required|in:active,inactive',
         ]);
+
+        // Generate employee code based on designation
+        $designation = Designation::find($validated['designation_id']);
+        $prefix = $designation->code ?? 'EMP';
+
+        $lastEmployeeWithPrefix = Employee::where('employee_code', 'like', $prefix . '%')
+            ->orderByRaw('CAST(SUBSTRING(employee_code, ' . (strlen($prefix) + 1) . ') AS UNSIGNED) DESC')
+            ->first();
+
+        if ($lastEmployeeWithPrefix) {
+            $lastNumber = (int) substr($lastEmployeeWithPrefix->employee_code, strlen($prefix));
+            $nextNumber = $lastNumber + 1;
+        } else {
+            $nextNumber = 1;
+        }
+
+        $validated['employee_code'] = $prefix . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
+
+        // Handle photo upload - convert to base64
+        if ($request->hasFile('photo')) {
+            $file = $request->file('photo');
+            $imageData = base64_encode(file_get_contents($file->getRealPath()));
+            $mimeType = $file->getMimeType();
+            $validated['photo'] = 'data:' . $mimeType . ';base64,' . $imageData;
+        } else {
+            unset($validated['photo']);
+        }
 
         Employee::create($validated);
 
@@ -81,14 +110,26 @@ class EmployeeController extends Controller
     public function update(Request $request, Employee $employee)
     {
         $validated = $request->validate([
-            'employee_code' => 'required|string|max:50|unique:employees,employee_code,' . $employee->id,
             'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:20',
             'designation_id' => 'required|exists:designations,id',
-            'hourly_rate' => 'required|numeric|min:0',
+            'employment_type' => 'required|in:permanent,contract,temporary',
+            'daily_rate' => 'required|numeric|min:0',
+            'working_hours' => 'required|numeric|min:1|max:24',
+            'photo' => 'nullable|image|max:5120', // 5MB max
             'site_id' => 'nullable|exists:sites,id',
             'status' => 'required|in:active,inactive',
         ]);
+
+        // Handle photo upload - convert to base64
+        if ($request->hasFile('photo')) {
+            $file = $request->file('photo');
+            $imageData = base64_encode(file_get_contents($file->getRealPath()));
+            $mimeType = $file->getMimeType();
+            $validated['photo'] = 'data:' . $mimeType . ';base64,' . $imageData;
+        } else {
+            unset($validated['photo']);
+        }
 
         $employee->update($validated);
 

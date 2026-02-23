@@ -168,7 +168,7 @@
                                 <td>{{ $usage->task->name ?? '-' }}</td>
                                 <td>{{ $usage->task->project->name ?? '-' }}</td>
                                 <td class="text-right">{{ number_format($usage->quantity, 2) }}</td>
-                                <td class="text-right">${{ number_format($usage->unit_cost, 2) }}</td>
+                                <td class="text-right">${{ number_format($usage->unit_price, 2) }}</td>
                                 <td class="text-right">${{ number_format($usage->total_cost, 2) }}</td>
                             </tr>
                         @empty

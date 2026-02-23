@@ -19,6 +19,9 @@ use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\DesignationController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\SalaryController;
+use App\Http\Controllers\Admin\AdvancePaymentController;
+use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
@@ -168,6 +171,29 @@ Route::middleware('auth')->group(function () {
         Route::get('attendance/export', [AttendanceReportController::class, 'export'])->name('attendance.export');
     });
 
+    // Salary Management
+    Route::middleware('permission:salary.view')->group(function () {
+        Route::get('salary', [SalaryController::class, 'index'])->name('salary.index');
+        Route::get('salary/payments', [SalaryController::class, 'payments'])->name('salary.payments');
+        Route::get('salary/employee/{employee}', [SalaryController::class, 'employeeDetails'])->name('salary.employee');
+    });
+    Route::middleware('permission:salary.manage')->group(function () {
+        Route::post('salary/generate', [SalaryController::class, 'generatePayments'])->name('salary.generate');
+        Route::post('salary/payments/{payment}/mark-paid', [SalaryController::class, 'markAsPaid'])->name('salary.mark-paid');
+        Route::post('salary/payments/mark-multiple-paid', [SalaryController::class, 'markMultiplePaid'])->name('salary.mark-multiple-paid');
+    });
+
+    // Advance Payments
+    Route::middleware('permission:salary.view')->group(function () {
+        Route::get('advances', [AdvancePaymentController::class, 'index'])->name('advances.index');
+        Route::get('advances/check-eligibility', [AdvancePaymentController::class, 'checkEligibility'])->name('advances.check-eligibility');
+    });
+    Route::middleware('permission:salary.manage')->group(function () {
+        Route::get('advances/create', [AdvancePaymentController::class, 'create'])->name('advances.create');
+        Route::post('advances', [AdvancePaymentController::class, 'store'])->name('advances.store');
+        Route::post('advances/{advance}/cancel', [AdvancePaymentController::class, 'cancel'])->name('advances.cancel');
+    });
+
     // Issues Management
     Route::middleware('permission:issues.view')->group(function () {
         Route::get('issues', [IssueController::class, 'index'])->name('issues.index');
@@ -207,4 +233,8 @@ Route::middleware('auth')->group(function () {
     Route::middleware('permission:users.create')->resource('users', UserController::class)->only(['create', 'store']);
     Route::middleware('permission:users.edit')->resource('users', UserController::class)->only(['edit', 'update']);
     Route::middleware('permission:users.delete')->resource('users', UserController::class)->only(['destroy']);
+
+    // Settings
+    Route::middleware('permission:settings.view')->get('settings', [SettingController::class, 'index'])->name('settings.index');
+    Route::middleware('permission:settings.edit')->post('settings', [SettingController::class, 'update'])->name('settings.update');
 });

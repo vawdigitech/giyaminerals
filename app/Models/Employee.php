@@ -12,7 +12,10 @@ class Employee extends Model
         'phone',
         'designation_id',
         'employment_type',
+        'salary_type',
         'hourly_rate',
+        'daily_rate',
+        'working_hours',
         'photo',
         'site_id',
         'status',
@@ -20,6 +23,8 @@ class Employee extends Model
 
     protected $casts = [
         'hourly_rate' => 'decimal:2',
+        'daily_rate' => 'decimal:2',
+        'working_hours' => 'decimal:2',
     ];
 
     public function site()
@@ -45,5 +50,15 @@ class Employee extends Model
     public function todayAttendance()
     {
         return $this->hasOne(Attendance::class)->whereDate('date', today());
+    }
+
+    public function weeklySalaryPayments()
+    {
+        return $this->hasMany(WeeklySalaryPayment::class);
+    }
+
+    public function advancePayments()
+    {
+        return $this->hasMany(AdvancePayment::class);
     }
 }

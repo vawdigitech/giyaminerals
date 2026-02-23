@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DesignationController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\ProjectController;
@@ -11,6 +12,8 @@ use App\Http\Controllers\Api\TaskStockUsageController;
 use App\Http\Controllers\Api\SiteIssueController;
 use App\Http\Controllers\Api\WorkSessionController;
 use App\Http\Controllers\Api\TaskProgressPhotoController;
+use App\Http\Controllers\Api\SalaryController;
+use App\Http\Controllers\Api\AdvancePaymentController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -32,6 +35,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
+
+    // Designations
+    Route::get('/designations', [DesignationController::class, 'index']);
+    Route::get('/designations/{designation}', [DesignationController::class, 'show']);
 
     // Employees
     Route::get('/employees', [EmployeeController::class, 'index']);
@@ -112,4 +119,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/work-sessions/employee/{employee}', [WorkSessionController::class, 'byEmployee']);
     Route::get('/work-sessions/employee/{employee}/today', [WorkSessionController::class, 'employeeTodaySummary']);
     Route::get('/task-assignments/{assignment}/sessions', [WorkSessionController::class, 'byAssignment']);
+
+    // Salary
+    Route::get('/salary/employee/{employee}/weekly', [SalaryController::class, 'getWeeklySummary']);
+    Route::get('/salary/weekly-report', [SalaryController::class, 'getWeeklyReport']);
+    Route::post('/salary/generate-weekly', [SalaryController::class, 'generateWeeklyPayments']);
+    Route::post('/salary/payments/{payment}/mark-paid', [SalaryController::class, 'markAsPaid']);
+    Route::get('/salary/payments', [SalaryController::class, 'listPayments']);
+
+    // Advance Payments
+    Route::get('/advances/check-eligibility/{employee}', [AdvancePaymentController::class, 'checkEligibility']);
+    Route::post('/advances', [AdvancePaymentController::class, 'store']);
+    Route::get('/advances', [AdvancePaymentController::class, 'index']);
+    Route::get('/advances/employee/{employee}', [AdvancePaymentController::class, 'byEmployee']);
+    Route::post('/advances/{advance}/cancel', [AdvancePaymentController::class, 'cancel']);
 });

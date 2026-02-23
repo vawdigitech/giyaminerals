@@ -12,10 +12,13 @@ class EmployeeController extends Controller
     {
         $user = $request->user();
 
-        $query = Employee::with(['site', 'todayAttendance']);
+        $query = Employee::with(['site', 'todayAttendance', 'designation']);
 
-        // Supervisors only see employees at their site
-        if ($user->isSupervisor() && $user->site_id) {
+        // Allow fetching all employees (bypass site restriction) when all=true
+        $fetchAll = $request->boolean('all', false);
+
+        // Supervisors only see employees at their site (unless all=true for search)
+        if (!$fetchAll && $user->isSupervisor() && $user->site_id) {
             $query->where('site_id', $user->site_id);
         }
 
@@ -29,9 +32,9 @@ class EmployeeController extends Controller
             $query->where('status', $request->status);
         }
 
-        // Filter by role
-        if ($request->has('role')) {
-            $query->where('role', $request->role);
+        // Filter by designation
+        if ($request->has('designation_id')) {
+            $query->where('designation_id', $request->designation_id);
         }
 
         // Search
@@ -54,7 +57,7 @@ class EmployeeController extends Controller
 
     public function show(Employee $employee)
     {
-        $employee->load(['site', 'todayAttendance', 'taskAssignments' => function ($query) {
+        $employee->load(['site', 'todayAttendance', 'designation', 'taskAssignments' => function ($query) {
             $query->whereNull('removed_at')->with('task');
         }]);
 
@@ -69,17 +72,33 @@ class EmployeeController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'phone' => 'nullable|string|max:20',
-            'role' => 'required|string|max:100',
+            'designation_id' => 'required|exists:designations,id',
             'employment_type' => 'required|in:permanent,contract,temporary',
-            'hourly_rate' => 'required|numeric|min:0',
+            'salary_type' => 'required|in:daily,hourly',
+            'hourly_rate' => 'nullable|numeric|min:0',
+            'daily_rate' => 'nullable|numeric|min:0',
+            'working_hours' => 'nullable|numeric|min:0.5|max:24',
             'photo' => 'nullable|string',
             'site_id' => 'nullable|exists:sites,id',
         ]);
 
-        // Generate employee code
-        $lastEmployee = Employee::orderBy('id', 'desc')->first();
-        $nextId = $lastEmployee ? $lastEmployee->id + 1 : 1;
-        $validated['employee_code'] = 'EMP' . str_pad($nextId, 4, '0', STR_PAD_LEFT);
+        // Generate employee code based on designation
+        $designation = \App\Models\Designation::find($validated['designation_id']);
+        $prefix = $designation->code ?? 'EMP';
+
+        // Count existing employees with this designation prefix
+        $lastEmployeeWithPrefix = Employee::where('employee_code', 'like', $prefix . '%')
+            ->orderByRaw('CAST(SUBSTRING(employee_code, ' . (strlen($prefix) + 1) . ') AS UNSIGNED) DESC')
+            ->first();
+
+        if ($lastEmployeeWithPrefix) {
+            $lastNumber = (int) substr($lastEmployeeWithPrefix->employee_code, strlen($prefix));
+            $nextNumber = $lastNumber + 1;
+        } else {
+            $nextNumber = 1;
+        }
+
+        $validated['employee_code'] = $prefix . str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
 
         // If supervisor, default to their site
         $user = $request->user();
@@ -88,6 +107,7 @@ class EmployeeController extends Controller
         }
 
         $employee = Employee::create($validated);
+        $employee->load(['site', 'designation']);
 
         return response()->json([
             'success' => true,
@@ -101,15 +121,19 @@ class EmployeeController extends Controller
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'phone' => 'nullable|string|max:20',
-            'role' => 'sometimes|string|max:100',
+            'designation_id' => 'sometimes|exists:designations,id',
             'employment_type' => 'sometimes|in:permanent,contract,temporary',
-            'hourly_rate' => 'sometimes|numeric|min:0',
+            'salary_type' => 'sometimes|in:daily,hourly',
+            'hourly_rate' => 'nullable|numeric|min:0',
+            'daily_rate' => 'nullable|numeric|min:0',
+            'working_hours' => 'nullable|numeric|min:0.5|max:24',
             'photo' => 'nullable|string',
             'site_id' => 'nullable|exists:sites,id',
             'status' => 'sometimes|in:active,inactive',
         ]);
 
         $employee->update($validated);
+        $employee->load(['site', 'designation']);
 
         return response()->json([
             'success' => true,
@@ -132,7 +156,8 @@ class EmployeeController extends Controller
     {
         $user = $request->user();
 
-        $query = Employee::where('status', 'active')
+        $query = Employee::with(['site', 'designation'])
+            ->where('status', 'active')
             ->whereDoesntHave('taskAssignments', function ($q) {
                 $q->whereNull('removed_at');
             });

@@ -57,6 +57,10 @@ class AttendanceReportController extends Controller
         $summary = [
             'total_records' => $query->count(),
             'total_hours' => $query->sum('total_hours'),
+            'total_salary' => $query->sum('daily_salary'),
+            'total_overtime_salary' => $query->sum('overtime_salary'),
+            'total_overtime_hours' => $query->sum('overtime_hours'),
+            'overtime_count' => (clone $query)->where('overtime_applicable', true)->count(),
             'present_count' => (clone $query)->where('status', 'present')->count(),
             'absent_count' => (clone $query)->where('status', 'absent')->count(),
             'late_count' => (clone $query)->where('status', 'late')->count(),
@@ -137,6 +141,9 @@ class AttendanceReportController extends Controller
             'absent' => $workingDays - $attendances->count(),
             'total_hours' => $attendances->sum('total_hours'),
             'average_hours' => $attendances->count() > 0 ? round($attendances->sum('total_hours') / $attendances->count(), 2) : 0,
+            'total_overtime_hours' => $attendances->sum('overtime_hours'),
+            'total_overtime_salary' => $attendances->sum('overtime_salary'),
+            'overtime_count' => $attendances->where('overtime_applicable', true)->count(),
         ];
 
         return view('attendance.employee-report', compact(
@@ -173,7 +180,7 @@ class AttendanceReportController extends Controller
             // Header row
             fputcsv($file, [
                 'Date', 'Employee Code', 'Employee Name', 'Site',
-                'Check In', 'Check Out', 'Total Hours', 'Status'
+                'Check In', 'Check Out', 'Total Hours', 'OT Hours', 'OT Salary', 'Daily Salary', 'Status'
             ]);
 
             foreach ($data as $attendance) {
@@ -185,6 +192,9 @@ class AttendanceReportController extends Controller
                     $attendance->check_in_time,
                     $attendance->check_out_time,
                     $attendance->total_hours,
+                    $attendance->overtime_hours ?? 0,
+                    $attendance->overtime_salary ?? 0,
+                    $attendance->daily_salary ?? 0,
                     $attendance->status,
                 ]);
             }

@@ -81,15 +81,17 @@ class AnalyticsController extends Controller
         $endDate = $request->input('end_date', Carbon::now()->format('Y-m-d'));
 
         // Get work logs grouped by employee
-        $laborData = TaskWorkLog::with(['employee', 'taskAssignment.task.project'])
-            ->whereBetween('work_date', [$startDate, $endDate])
+        $laborData = TaskWorkLog::with(['assignment.employee', 'assignment.task.project'])
+            ->whereBetween('date', [$startDate, $endDate])
             ->get()
-            ->groupBy('employee_id')
+            ->groupBy(function ($log) {
+                return $log->assignment->employee_id ?? 0;
+            })
             ->map(function ($logs, $employeeId) {
-                $employee = $logs->first()->employee;
-                $totalHours = $logs->sum('hours_worked');
+                $employee = $logs->first()->assignment->employee ?? null;
+                $totalHours = $logs->sum('hours');
                 $totalCost = $logs->sum(function ($log) {
-                    return $log->hours_worked * $log->hourly_rate;
+                    return $log->hours * ($log->assignment->hourly_rate_at_time ?? 0);
                 });
 
                 return [
@@ -97,7 +99,7 @@ class AnalyticsController extends Controller
                     'total_hours' => round($totalHours, 2),
                     'total_cost' => round($totalCost, 2),
                     'average_rate' => $totalHours > 0 ? round($totalCost / $totalHours, 2) : 0,
-                    'days_worked' => $logs->unique('work_date')->count(),
+                    'days_worked' => $logs->unique('date')->count(),
                 ];
             })
             ->sortByDesc('total_hours')

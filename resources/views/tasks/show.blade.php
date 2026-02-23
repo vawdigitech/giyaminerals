@@ -281,11 +281,21 @@
                                     <th>Assigned</th>
                                     <th>Hours Worked</th>
                                     <th>Rate</th>
+                                    <th>Amount</th>
                                     <th>Status</th>
                                 </tr>
                             </thead>
                             <tbody>
+                                @php
+                                    $totalAssignmentHours = 0;
+                                    $totalAssignmentCost = 0;
+                                @endphp
                                 @forelse($task->assignments as $assignment)
+                                    @php
+                                        $assignmentAmount = ($assignment->hours_worked ?? 0) * ($assignment->hourly_rate_at_time ?? 0);
+                                        $totalAssignmentHours += $assignment->hours_worked ?? 0;
+                                        $totalAssignmentCost += $assignmentAmount;
+                                    @endphp
                                     <tr>
                                         <td>
                                             <a href="{{ route('employees.show', $assignment->employee) }}">
@@ -295,6 +305,7 @@
                                         <td>{{ $assignment->assigned_at ? \Carbon\Carbon::parse($assignment->assigned_at)->format('M d, Y') : '-' }}</td>
                                         <td>{{ number_format($assignment->hours_worked ?? 0, 1) }}</td>
                                         <td>${{ number_format($assignment->hourly_rate_at_time ?? 0, 2) }}/hr</td>
+                                        <td><strong>${{ number_format($assignmentAmount, 2) }}</strong></td>
                                         <td>
                                             @if($assignment->removed_at)
                                                 <span class="badge badge-secondary">Removed</span>
@@ -305,10 +316,21 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="5" class="text-center">No employees assigned to this task.</td>
+                                        <td colspan="6" class="text-center">No employees assigned to this task.</td>
                                     </tr>
                                 @endforelse
                             </tbody>
+                            @if($task->assignments->count() > 0)
+                            <tfoot class="bg-light">
+                                <tr>
+                                    <th colspan="2" class="text-right">Totals:</th>
+                                    <th>{{ number_format($totalAssignmentHours, 1) }} hrs</th>
+                                    <th></th>
+                                    <th><strong>${{ number_format($totalAssignmentCost, 2) }}</strong></th>
+                                    <th></th>
+                                </tr>
+                            </tfoot>
+                            @endif
                         </table>
                     </div>
                 </div>

@@ -14,20 +14,17 @@
                     <div class="card-header">
                         <h3 class="card-title">Edit Employee: {{ $employee->name }}</h3>
                     </div>
-                    <form method="POST" action="{{ route('employees.update', $employee) }}">
+                    <form method="POST" action="{{ route('employees.update', $employee) }}" enctype="multipart/form-data">
                         @csrf
                         @method('PUT')
                         <div class="card-body">
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        <label for="employee_code">Employee Code <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control @error('employee_code') is-invalid @enderror"
-                                            id="employee_code" name="employee_code"
-                                            value="{{ old('employee_code', $employee->employee_code) }}" required>
-                                        @error('employee_code')
-                                            <span class="invalid-feedback">{{ $message }}</span>
-                                        @enderror
+                                        <label for="employee_code">Employee Code</label>
+                                        <input type="text" class="form-control" id="employee_code"
+                                            value="{{ $employee->employee_code }}" readonly disabled>
+                                        <small class="text-muted">Employee code cannot be changed</small>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -76,16 +73,72 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        <label for="hourly_rate">Hourly Rate ($) <span class="text-danger">*</span></label>
-                                        <input type="number" step="0.01" min="0"
-                                            class="form-control @error('hourly_rate') is-invalid @enderror"
-                                            id="hourly_rate" name="hourly_rate"
-                                            value="{{ old('hourly_rate', $employee->hourly_rate) }}" required>
-                                        @error('hourly_rate')
+                                        <label for="photo">Photo</label>
+                                        @if($employee->photo)
+                                            <div class="mb-2">
+                                                <img src="{{ $employee->photo }}" alt="Current Photo" style="max-width: 100px; max-height: 100px; border-radius: 8px;">
+                                                <br><small class="text-muted">Current photo</small>
+                                            </div>
+                                        @endif
+                                        <div class="custom-file">
+                                            <input type="file" class="custom-file-input @error('photo') is-invalid @enderror"
+                                                id="photo" name="photo" accept="image/*">
+                                            <label class="custom-file-label" for="photo">{{ $employee->photo ? 'Change photo' : 'Choose file' }}</label>
+                                        </div>
+                                        @error('photo')
+                                            <span class="invalid-feedback d-block">{{ $message }}</span>
+                                        @enderror
+                                        <div id="photo-preview" class="mt-2" style="display: none;">
+                                            <img id="preview-image" src="" alt="Preview" style="max-width: 150px; max-height: 150px; border-radius: 8px;">
+                                            <br><small class="text-muted">New photo preview</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="employment_type">Employment Type <span class="text-danger">*</span></label>
+                                        <select class="form-control @error('employment_type') is-invalid @enderror"
+                                            id="employment_type" name="employment_type" required>
+                                            <option value="permanent" {{ old('employment_type', $employee->employment_type) == 'permanent' ? 'selected' : '' }}>Permanent</option>
+                                            <option value="contract" {{ old('employment_type', $employee->employment_type) == 'contract' ? 'selected' : '' }}>Contract</option>
+                                            <option value="temporary" {{ old('employment_type', $employee->employment_type) == 'temporary' ? 'selected' : '' }}>Temporary</option>
+                                        </select>
+                                        @error('employment_type')
                                             <span class="invalid-feedback">{{ $message }}</span>
                                         @enderror
                                     </div>
                                 </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="daily_rate">Daily Rate (₹) <span class="text-danger">*</span></label>
+                                        <input type="number" step="0.01" min="0"
+                                            class="form-control @error('daily_rate') is-invalid @enderror"
+                                            id="daily_rate" name="daily_rate"
+                                            value="{{ old('daily_rate', $employee->daily_rate) }}" required>
+                                        @error('daily_rate')
+                                            <span class="invalid-feedback">{{ $message }}</span>
+                                        @enderror
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="working_hours">Working Hours <span class="text-danger">*</span></label>
+                                        <input type="number" step="0.5" min="1" max="24"
+                                            class="form-control @error('working_hours') is-invalid @enderror"
+                                            id="working_hours" name="working_hours"
+                                            value="{{ old('working_hours', $employee->working_hours ?? 8) }}" required>
+                                        @error('working_hours')
+                                            <span class="invalid-feedback">{{ $message }}</span>
+                                        @enderror
+                                        <small class="text-muted">Standard working hours per day (used for salary calculation)</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label for="site_id">Assigned Site</label>
@@ -104,18 +157,19 @@
                                         @enderror
                                     </div>
                                 </div>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="status">Status <span class="text-danger">*</span></label>
-                                <select class="form-control @error('status') is-invalid @enderror"
-                                    id="status" name="status" required>
-                                    <option value="active" {{ old('status', $employee->status) == 'active' ? 'selected' : '' }}>Active</option>
-                                    <option value="inactive" {{ old('status', $employee->status) == 'inactive' ? 'selected' : '' }}>Inactive</option>
-                                </select>
-                                @error('status')
-                                    <span class="invalid-feedback">{{ $message }}</span>
-                                @enderror
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="status">Status <span class="text-danger">*</span></label>
+                                        <select class="form-control @error('status') is-invalid @enderror"
+                                            id="status" name="status" required>
+                                            <option value="active" {{ old('status', $employee->status) == 'active' ? 'selected' : '' }}>Active</option>
+                                            <option value="inactive" {{ old('status', $employee->status) == 'inactive' ? 'selected' : '' }}>Inactive</option>
+                                        </select>
+                                        @error('status')
+                                            <span class="invalid-feedback">{{ $message }}</span>
+                                        @enderror
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="card-footer">
@@ -128,4 +182,27 @@
         </div>
     </div>
 </section>
+@endsection
+
+@section('scripts')
+<script>
+    // File input label update
+    document.getElementById('photo').addEventListener('change', function(e) {
+        var fileName = e.target.files[0] ? e.target.files[0].name : 'Choose file';
+        var label = this.nextElementSibling;
+        label.textContent = fileName;
+
+        // Show preview
+        if (e.target.files[0]) {
+            var reader = new FileReader();
+            reader.onload = function(event) {
+                document.getElementById('preview-image').src = event.target.result;
+                document.getElementById('photo-preview').style.display = 'block';
+            };
+            reader.readAsDataURL(e.target.files[0]);
+        } else {
+            document.getElementById('photo-preview').style.display = 'none';
+        }
+    });
+</script>
 @endsection

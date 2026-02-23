@@ -14,12 +14,17 @@
                 <div class="card card-primary card-outline">
                     <div class="card-body box-profile">
                         <div class="text-center">
-                            <div class="rounded-circle bg-primary d-inline-flex align-items-center justify-content-center"
-                                style="width: 80px; height: 80px;">
-                                <span class="text-white" style="font-size: 2rem;">
-                                    {{ strtoupper(substr($employee->name, 0, 2)) }}
-                                </span>
-                            </div>
+                            @if($employee->photo)
+                                <img src="{{ $employee->photo }}" alt="{{ $employee->name }}"
+                                    class="rounded-circle" style="width: 80px; height: 80px; object-fit: cover;">
+                            @else
+                                <div class="rounded-circle bg-primary d-inline-flex align-items-center justify-content-center"
+                                    style="width: 80px; height: 80px;">
+                                    <span class="text-white" style="font-size: 2rem;">
+                                        {{ strtoupper(substr($employee->name, 0, 2)) }}
+                                    </span>
+                                </div>
+                            @endif
                         </div>
                         <h3 class="profile-username text-center mt-3">{{ $employee->name }}</h3>
                         <p class="text-muted text-center">{{ $employee->designation->name ?? 'No Designation' }}</p>
@@ -32,7 +37,10 @@
                                 <b>Phone</b> <a class="float-right">{{ $employee->phone ?? '-' }}</a>
                             </li>
                             <li class="list-group-item">
-                                <b>Hourly Rate</b> <a class="float-right">${{ number_format($employee->hourly_rate, 2) }}</a>
+                                <b>Daily Rate</b> <a class="float-right">₹{{ number_format($employee->daily_rate, 2) }}</a>
+                            </li>
+                            <li class="list-group-item">
+                                <b>Working Hours</b> <a class="float-right">{{ $employee->working_hours ?? '-' }}</a>
                             </li>
                             <li class="list-group-item">
                                 <b>Site</b>
@@ -73,7 +81,7 @@
                                 <small class="text-muted">Total Hours</small>
                             </div>
                             <div class="col-6 text-center">
-                                <h4 class="text-success">${{ number_format($totalEarnings, 2) }}</h4>
+                                <h4 class="text-success">₹{{ number_format($totalEarnings, 2) }}</h4>
                                 <small class="text-muted">Total Earnings</small>
                             </div>
                         </div>

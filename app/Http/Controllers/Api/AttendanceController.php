@@ -160,10 +160,15 @@ class AttendanceController extends Controller
         // End all active work sessions before checkout
         $workSummary = $this->workSessionService->handleCheckOut($attendance);
 
+        // Capture employee rate snapshots at checkout time
+        $employee = $attendance->employee;
+
         $attendance->update([
             'check_out_time' => now(),
             'check_out_photo' => $validated['photo'] ?? null,
             'check_out_location' => $validated['location'] ?? null,
+            'daily_rate_at_time' => $employee->daily_rate,
+            'working_hours_at_time' => $employee->working_hours,
         ]);
 
         $attendance->load('employee', 'site');
@@ -173,6 +178,15 @@ class AttendanceController extends Controller
             'message' => 'Check-out successful',
             'data' => $attendance,
             'work_summary' => $workSummary,
+            'salary_info' => [
+                'total_hours' => $attendance->total_hours,
+                'daily_salary' => $attendance->daily_salary,
+                'daily_rate' => $attendance->daily_rate_at_time,
+                'working_hours' => $attendance->working_hours_at_time,
+                'overtime_applicable' => $attendance->overtime_applicable,
+                'overtime_hours' => $attendance->overtime_hours,
+                'overtime_salary' => $attendance->overtime_salary,
+            ],
         ]);
     }
 

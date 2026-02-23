@@ -71,7 +71,8 @@
                                     <th>Designation</th>
                                     <th>Phone</th>
                                     <th>Site</th>
-                                    <th>Hourly Rate</th>
+                                    <th>Daily Rate</th>
+                                    <th>Working Hours</th>
                                     <th>Status</th>
                                     <th style="width: 150px;">Actions</th>
                                 </tr>
@@ -84,7 +85,8 @@
                                         <td>{{ $employee->designation->name ?? '-' }}</td>
                                         <td>{{ $employee->phone ?? '-' }}</td>
                                         <td>{{ $employee->site->name ?? '-' }}</td>
-                                        <td>${{ number_format($employee->hourly_rate, 2) }}</td>
+                                        <td>₹{{ number_format($employee->daily_rate, 2) }}</td>
+                                        <td>{{ $employee->working_hours ?? '-' }}</td>
                                         <td>
                                             <span class="badge badge-{{ $employee->status === 'active' ? 'success' : 'secondary' }}">
                                                 {{ ucfirst($employee->status) }}
