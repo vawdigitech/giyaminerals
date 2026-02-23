@@ -133,6 +133,7 @@
                             <th class="text-right">OT Salary</th>
                             <th class="text-right">Daily Salary</th>
                             <th>Status</th>
+                            <th>Marked By</th>
                             <th class="text-center">Actions</th>
                         </tr>
                     </thead>
@@ -182,6 +183,7 @@
                                         {{ ucfirst($attendance->status) }}
                                     </span>
                                 </td>
+                                <td>{{ $attendance->markedBy->name ?? '-' }}</td>
                                 <td class="text-center">
                                     <button type="button" class="btn btn-sm btn-info" data-toggle="modal" data-target="#detailsModal{{ $attendance->id }}">
                                         <i class="fas fa-eye"></i> View
