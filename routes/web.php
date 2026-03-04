@@ -142,22 +142,26 @@ Route::middleware('auth')->group(function () {
 
     // Task Management
     Route::middleware('permission:tasks.view')->group(function () {
-        Route::resource('tasks', TaskController::class)->only(['index', 'show']);
+        Route::get('tasks', [TaskController::class, 'index'])->name('tasks.index');
+        Route::get('tasks/{task}', [TaskController::class, 'show'])->name('tasks.show')->where('task', '[0-9]+');
         Route::get('tasks-by-project/{project}', [TaskController::class, 'getByProject'])->name('tasks.by-project');
         Route::get('tasks/{task}/materials', [TaskStockUsageController::class, 'index'])->name('tasks.materials.index');
         Route::get('tasks/{task}/materials/available-stock', [TaskStockUsageController::class, 'availableStock'])->name('tasks.materials.available-stock');
         Route::get('materials/return-destinations', [TaskStockUsageController::class, 'getReturnDestinations'])->name('materials.return-destinations');
     });
     Route::middleware('permission:tasks.create')->group(function () {
-        Route::resource('tasks', TaskController::class)->only(['create', 'store']);
+        Route::get('tasks/create', [TaskController::class, 'create'])->name('tasks.create');
+        Route::post('tasks', [TaskController::class, 'store'])->name('tasks.store');
         Route::post('tasks/{task}/materials', [TaskStockUsageController::class, 'store'])->name('tasks.materials.store');
     });
     Route::middleware('permission:tasks.edit')->group(function () {
-        Route::resource('tasks', TaskController::class)->only(['edit', 'update']);
+        Route::get('tasks/{task}/edit', [TaskController::class, 'edit'])->name('tasks.edit');
+        Route::put('tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
+        Route::patch('tasks/{task}', [TaskController::class, 'update']);
         Route::post('tasks/{task}/materials/{usage}/return', [TaskStockUsageController::class, 'returnMaterial'])->name('tasks.materials.return');
     });
     Route::middleware('permission:tasks.delete')->group(function () {
-        Route::resource('tasks', TaskController::class)->only(['destroy']);
+        Route::delete('tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
         Route::delete('tasks/{task}/materials/{usage}', [TaskStockUsageController::class, 'destroy'])->name('tasks.materials.destroy');
     });
 
