@@ -203,6 +203,11 @@ class TaskController extends Controller
             'due_date' => 'nullable|date',
         ]);
 
+        // Set quoted_amount to 0 if not provided
+        if (!isset($validated['quoted_amount']) || $validated['quoted_amount'] === '' || $validated['quoted_amount'] === null) {
+            $validated['quoted_amount'] = 0;
+        }
+
         // Check for unique code within project
         $existingTask = Task::where('project_id', $validated['project_id'])
             ->where('code', $validated['code'])
@@ -217,9 +222,13 @@ class TaskController extends Controller
 
         $task = Task::create($validated);
 
-        // Update parent task progress if this is a subtask
+        // Initialize aggregated values for the newly created task
+        $task->recalculateAggregatedCosts();
+
+        // Update parent task progress and aggregated costs if this is a subtask
         if ($task->parent_id) {
             $task->parent->recalculateProgressFromSubtasks();
+            $task->parent->recalculateAggregatedCosts();
         }
 
         // Update parent project progress and status
@@ -250,6 +259,59 @@ class TaskController extends Controller
         return response()->json([
             'success' => true,
             'data' => $tasks,
+        ]);
+    }
+
+    public function suggestCode(Request $request)
+    {
+        $request->validate([
+            'project_id' => 'required|exists:projects,id',
+            'parent_id'  => 'nullable|exists:tasks,id',
+        ]);
+
+        $projectId = $request->project_id;
+        $parentId  = $request->parent_id;
+
+        if ($parentId) {
+            $parent     = Task::find($parentId);
+            $baseNumber = explode('.', $parent->code)[0];
+
+            $lastSub = Task::where('project_id', $projectId)
+                ->where('parent_id', $parentId)
+                ->get()
+                ->sortBy(function ($t) {
+                    $parts = explode('.', $t->code);
+                    return isset($parts[1]) ? (int) $parts[1] : 0;
+                })
+                ->last();
+
+            if ($lastSub) {
+                $parts    = explode('.', $lastSub->code);
+                $lastNum  = isset($parts[1]) ? (int) $parts[1] : 0;
+                $nextCode = $baseNumber . '.' . ($lastNum + 1);
+            } else {
+                $nextCode = $baseNumber . '.1';
+            }
+        } else {
+            $lastMaster = Task::where('project_id', $projectId)
+                ->whereNull('parent_id')
+                ->get()
+                ->sortBy(function ($t) {
+                    return (int) explode('.', $t->code)[0];
+                })
+                ->last();
+
+            if ($lastMaster) {
+                $lastNum  = (int) explode('.', $lastMaster->code)[0];
+                $nextCode = ($lastNum + 1) . '.0';
+            } else {
+                $nextCode = '1.0';
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => ['code' => $nextCode],
         ]);
     }
 }

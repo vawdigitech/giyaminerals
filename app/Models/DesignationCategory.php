@@ -3,30 +3,23 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class Designation extends Model
+class DesignationCategory extends Model
 {
     protected $fillable = [
         'name',
         'code',
         'description',
         'is_active',
-        'category_id',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
     ];
 
-    public function employees()
+    public function designations()
     {
-        return $this->hasMany(Employee::class);
-    }
-
-    public function category(): BelongsTo
-    {
-        return $this->belongsTo(DesignationCategory::class, 'category_id');
+        return $this->hasMany(Designation::class, 'category_id');
     }
 
     public function scopeActive($query)

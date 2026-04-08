@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
+use App\Models\AttendanceBreak;
 use App\Models\Employee;
 use App\Services\WorkSessionService;
 use Carbon\Carbon;
@@ -171,7 +172,7 @@ class AttendanceController extends Controller
             'working_hours_at_time' => $employee->working_hours,
         ]);
 
-        $attendance->load('employee', 'site');
+        $attendance->load('employee', 'site', 'breaks');
 
         return response()->json([
             'success' => true,
@@ -190,9 +191,70 @@ class AttendanceController extends Controller
         ]);
     }
 
+    public function breakOut(Request $request, Attendance $attendance)
+    {
+        if (!$attendance->check_in_time || $attendance->check_out_time) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Employee is not currently checked in',
+            ], 422);
+        }
+
+        if ($attendance->isOnBreak()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Employee is already on a break',
+            ], 422);
+        }
+
+        $this->workSessionService->handleBreakOut($attendance);
+
+        $break = AttendanceBreak::create([
+            'attendance_id' => $attendance->id,
+            'break_out_time' => now(),
+        ]);
+
+        $attendance->load('employee', 'site', 'breaks');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Break started',
+            'data' => $attendance,
+            'break' => $break,
+        ]);
+    }
+
+    public function breakIn(Request $request, Attendance $attendance)
+    {
+        $openBreak = AttendanceBreak::where('attendance_id', $attendance->id)
+            ->whereNull('break_in_time')
+            ->latest()
+            ->first();
+
+        if (!$openBreak) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active break found',
+            ], 422);
+        }
+
+        $this->workSessionService->handleBreakIn($attendance);
+
+        $openBreak->update(['break_in_time' => now()]);
+
+        $attendance->load('employee', 'site', 'breaks');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Break ended',
+            'data' => $attendance,
+            'break' => $openBreak->fresh(),
+        ]);
+    }
+
     public function show(Attendance $attendance)
     {
-        $attendance->load('employee', 'site', 'markedBy');
+        $attendance->load('employee', 'site', 'markedBy', 'breaks');
 
         return response()->json([
             'success' => true,

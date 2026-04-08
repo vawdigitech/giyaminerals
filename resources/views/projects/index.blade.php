@@ -131,7 +131,7 @@
                                         <td>{{ $project->code }}</td>
                                         <td>{{ $project->name }}</td>
                                         <td>{{ $project->site->name ?? '-' }}</td>
-                                        <td>${{ number_format($project->quoted_amount, 2) }}</td>
+                                        <td>₹{{ number_format($project->quoted_amount, 2) }}</td>
                                         <td>
                                             <div class="progress progress-sm">
                                                 <div class="progress-bar bg-primary" style="width: {{ $project->progress }}%"></div>

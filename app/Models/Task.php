@@ -24,6 +24,7 @@ class Task extends Model
         'aggregated_labor_cost',
         'aggregated_material_cost',
         'aggregated_actual_amount',
+        'aggregated_quoted_amount',
         'start_date',
         'due_date',
         'completed_date',
@@ -38,6 +39,7 @@ class Task extends Model
         'aggregated_labor_cost' => 'decimal:2',
         'aggregated_material_cost' => 'decimal:2',
         'aggregated_actual_amount' => 'decimal:2',
+        'aggregated_quoted_amount' => 'decimal:2',
         'start_date' => 'date',
         'due_date' => 'date',
         'completed_date' => 'date',
@@ -106,12 +108,22 @@ class Task extends Model
         $this->material_cost = $this->calculateMaterialCost();
         $this->actual_amount = $this->labor_cost + $this->material_cost;
         $this->total_hours_worked = $this->calculateTotalHoursWorked();
+
+        \Log::info("Task direct costs calculated", [
+            'task_id' => $this->id,
+            'task_code' => $this->code,
+            'labor_cost' => $this->labor_cost,
+            'material_cost' => $this->material_cost,
+            'actual_amount' => $this->actual_amount,
+            'total_hours_worked' => $this->total_hours_worked
+        ]);
+
         $this->save();
 
-        // If this is a subtask, update parent's aggregated costs
-        if ($this->parent_id) {
-            $this->parent->recalculateAggregatedCosts();
-        }
+        // Update this task's own aggregated costs (for leaf tasks, aggregated = direct)
+        $this->recalculateAggregatedCosts();
+
+        // If this is a subtask, parent's aggregated costs are already updated by the above call
     }
 
     public function calculateTotalHoursWorked()
@@ -132,8 +144,8 @@ class Task extends Model
             return;
         }
 
-        // Calculate average progress from all subtasks
-        $subtasks = $this->subtasks;
+        // Calculate average progress from all subtasks - use fresh query to avoid cached data
+        $subtasks = $this->subtasks()->get();
 
         if ($subtasks->count() > 0) {
             $this->progress = (int) round($subtasks->avg('progress'));
@@ -165,26 +177,48 @@ class Task extends Model
     public function recalculateAggregatedCosts()
     {
         if (!$this->hasSubtasks()) {
-            // For leaf tasks, aggregated values equal direct values
-            $this->aggregated_labor_cost = $this->labor_cost;
-            $this->aggregated_material_cost = $this->material_cost;
-            $this->aggregated_actual_amount = $this->actual_amount;
+            // For leaf tasks, aggregated values equal direct values (coalesce NULL to 0)
+            $this->aggregated_labor_cost = $this->labor_cost ?? 0;
+            $this->aggregated_material_cost = $this->material_cost ?? 0;
+            $this->aggregated_actual_amount = $this->actual_amount ?? 0;
+            $this->aggregated_quoted_amount = $this->quoted_amount ?? 0;
+
+            \Log::info("Leaf task aggregated costs updated", [
+                'task_id' => $this->id,
+                'task_code' => $this->code,
+                'labor_cost' => $this->labor_cost,
+                'aggregated_labor_cost' => $this->aggregated_labor_cost,
+                'parent_id' => $this->parent_id
+            ]);
+
             $this->save();
             return;
         }
 
-        // Sum from all subtasks
-        $subtasks = $this->subtasks;
+        // Sum from all subtasks - use fresh query to avoid cached relationship data
+        $subtasks = $this->subtasks()->get();
 
-        $this->aggregated_labor_cost = $subtasks->sum('labor_cost') + $subtasks->sum('aggregated_labor_cost');
-        $this->aggregated_material_cost = $subtasks->sum('material_cost') + $subtasks->sum('aggregated_material_cost');
+        // Only sum aggregated values (which already include direct values for leaf tasks)
+        $this->aggregated_labor_cost = $subtasks->sum('aggregated_labor_cost') ?? 0;
+        $this->aggregated_material_cost = $subtasks->sum('aggregated_material_cost') ?? 0;
         $this->aggregated_actual_amount = $this->aggregated_labor_cost + $this->aggregated_material_cost;
-        $this->total_hours_worked = $subtasks->sum('total_hours_worked');
+        $this->aggregated_quoted_amount = $subtasks->sum('aggregated_quoted_amount') ?? 0;
+        $this->total_hours_worked = $subtasks->sum('total_hours_worked') ?? 0;
+
+        \Log::info("Parent task aggregated costs updated", [
+            'task_id' => $this->id,
+            'task_code' => $this->code,
+            'subtasks_count' => $subtasks->count(),
+            'aggregated_labor_cost' => $this->aggregated_labor_cost,
+            'aggregated_material_cost' => $this->aggregated_material_cost,
+            'parent_id' => $this->parent_id
+        ]);
 
         $this->save();
 
         // Propagate up to parent if exists
         if ($this->parent_id) {
+            $this->parent->refresh(); // Ensure parent has latest data
             $this->parent->recalculateAggregatedCosts();
         }
     }

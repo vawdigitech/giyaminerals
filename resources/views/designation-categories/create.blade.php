@@ -1,9 +1,9 @@
 @extends('layouts.app')
-@section('page_title', 'Edit Designation')
+@section('page_title', 'Add Designation Category')
 @section('breadcrumb')
     <li class="breadcrumb-item"><a href="{{ route('dashboard.index') }}">Dashboard</a></li>
-    <li class="breadcrumb-item"><a href="{{ route('designations.index') }}">Designations</a></li>
-    <li class="breadcrumb-item active">Edit Designation</li>
+    <li class="breadcrumb-item"><a href="{{ route('designation-categories.index') }}">Designation Categories</a></li>
+    <li class="breadcrumb-item active">Add Category</li>
 @endsection
 @section('content')
 <section class="content">
@@ -12,18 +12,18 @@
             <div class="col-md-8 offset-md-2">
                 <div class="card card-primary">
                     <div class="card-header">
-                        <h3 class="card-title">Edit Designation: {{ $designation->name }}</h3>
+                        <h3 class="card-title">Add New Designation Category</h3>
                     </div>
-                    <form method="POST" action="{{ route('designations.update', $designation) }}">
+                    <form method="POST" action="{{ route('designation-categories.store') }}">
                         @csrf
-                        @method('PUT')
                         <div class="card-body">
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        <label for="name">Designation Name <span class="text-danger">*</span></label>
+                                        <label for="name">Category Name <span class="text-danger">*</span></label>
                                         <input type="text" class="form-control @error('name') is-invalid @enderror"
-                                            id="name" name="name" value="{{ old('name', $designation->name) }}" required>
+                                            id="name" name="name" value="{{ old('name') }}"
+                                            placeholder="e.g., Carpentry, Electrical" required>
                                         @error('name')
                                             <span class="invalid-feedback">{{ $message }}</span>
                                         @enderror
@@ -33,33 +33,21 @@
                                     <div class="form-group">
                                         <label for="code">Code <span class="text-danger">*</span></label>
                                         <input type="text" class="form-control @error('code') is-invalid @enderror"
-                                            id="code" name="code" value="{{ old('code', $designation->code) }}"
-                                            required style="text-transform: uppercase;">
+                                            id="code" name="code" value="{{ old('code') }}"
+                                            placeholder="e.g., CARP, ELEC" required style="text-transform: uppercase;">
                                         @error('code')
                                             <span class="invalid-feedback">{{ $message }}</span>
                                         @enderror
-                                        <small class="form-text text-muted">Unique identifier code</small>
+                                        <small class="form-text text-muted">Unique identifier code (will be converted to uppercase)</small>
                                     </div>
                                 </div>
                             </div>
 
                             <div class="form-group">
-                                <label for="category_id">Category</label>
-                                <select class="form-control @error('category_id') is-invalid @enderror" id="category_id" name="category_id">
-                                    <option value="">-- No Category --</option>
-                                    @foreach($categories as $category)
-                                        <option value="{{ $category->id }}" {{ old('category_id', $designation->category_id) == $category->id ? 'selected' : '' }}>{{ $category->name }}</option>
-                                    @endforeach
-                                </select>
-                                @error('category_id')
-                                    <span class="invalid-feedback">{{ $message }}</span>
-                                @enderror
-                            </div>
-
-                            <div class="form-group">
                                 <label for="description">Description</label>
                                 <textarea class="form-control @error('description') is-invalid @enderror"
-                                    id="description" name="description" rows="3">{{ old('description', $designation->description) }}</textarea>
+                                    id="description" name="description" rows="3"
+                                    placeholder="Brief description of this category...">{{ old('description') }}</textarea>
                                 @error('description')
                                     <span class="invalid-feedback">{{ $message }}</span>
                                 @enderror
@@ -67,15 +55,15 @@
 
                             <div class="form-group">
                                 <div class="custom-control custom-switch">
-                                    <input type="checkbox" class="custom-control-input" id="is_active" name="is_active" value="1" {{ old('is_active', $designation->is_active) ? 'checked' : '' }}>
+                                    <input type="checkbox" class="custom-control-input" id="is_active" name="is_active" value="1" {{ old('is_active', true) ? 'checked' : '' }}>
                                     <label class="custom-control-label" for="is_active">Active</label>
                                 </div>
-                                <small class="form-text text-muted">Inactive designations won't appear in dropdown lists</small>
+                                <small class="form-text text-muted">Inactive categories won't appear in dropdown lists</small>
                             </div>
                         </div>
                         <div class="card-footer">
-                            <button type="submit" class="btn btn-primary">Update Designation</button>
-                            <a href="{{ route('designations.index') }}" class="btn btn-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-primary">Save Category</button>
+                            <a href="{{ route('designation-categories.index') }}" class="btn btn-secondary">Cancel</a>
                         </div>
                     </form>
                 </div>
@@ -84,3 +72,15 @@
     </div>
 </section>
 @endsection
+
+@push('scripts')
+<script>
+    // Auto-generate code from name
+    $('#name').on('blur', function() {
+        const code = $('#code');
+        if (!code.val()) {
+            code.val($(this).val().toUpperCase().replace(/[^A-Z0-9]/g, '_').substring(0, 20));
+        }
+    });
+</script>
+@endpush

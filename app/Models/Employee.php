@@ -27,6 +27,25 @@ class Employee extends Model
         'working_hours' => 'decimal:2',
     ];
 
+    /**
+     * Get the hourly rate, calculating from daily rate if not set
+     */
+    public function getHourlyRateAttribute($value)
+    {
+        // If hourly_rate is already set and non-zero, use it
+        if ($value && $value > 0) {
+            return (float) $value;
+        }
+
+        // Otherwise calculate from daily_rate and working_hours
+        if ($this->daily_rate && $this->working_hours && $this->working_hours > 0) {
+            return round($this->daily_rate / $this->working_hours, 2);
+        }
+
+        // Return 0 if we can't calculate
+        return 0;
+    }
+
     public function site()
     {
         return $this->belongsTo(Site::class);

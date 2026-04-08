@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\Designation;
+use App\Models\DesignationCategory;
 use App\Models\Site;
 use Illuminate\Http\Request;
 
@@ -12,7 +13,7 @@ class EmployeeController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Employee::with(['site', 'designation']);
+        $query = Employee::with(['site', 'designation.category']);
 
         // Filter by site
         if ($request->filled('site_id')) {
@@ -29,6 +30,13 @@ class EmployeeController extends Controller
             $query->where('designation_id', $request->designation_id);
         }
 
+        // Filter by category
+        if ($request->filled('category_id')) {
+            $query->whereHas('designation', function ($q) use ($request) {
+                $q->where('category_id', $request->category_id);
+            });
+        }
+
         // Search
         if ($request->filled('search')) {
             $search = $request->search;
@@ -39,18 +47,54 @@ class EmployeeController extends Controller
             });
         }
 
-        $employees = $query->orderBy('name')->paginate(15);
+        // Sorting
+        $sortBy = $request->get('sort_by', 'category');
+        $sortDir = $request->get('sort_dir', 'asc');
+
+        switch ($sortBy) {
+            case 'category':
+                $query->leftJoin('designations', 'employees.designation_id', '=', 'designations.id')
+                      ->leftJoin('designation_categories', 'designations.category_id', '=', 'designation_categories.id')
+                      ->orderBy('designation_categories.name', $sortDir)
+                      ->select('employees.*');
+                break;
+            case 'designation':
+                $query->leftJoin('designations', 'employees.designation_id', '=', 'designations.id')
+                      ->orderBy('designations.name', $sortDir)
+                      ->select('employees.*');
+                break;
+            case 'name':
+                $query->orderBy('employees.name', $sortDir);
+                break;
+            case 'site':
+                $query->leftJoin('sites', 'employees.site_id', '=', 'sites.id')
+                      ->orderBy('sites.name', $sortDir)
+                      ->select('employees.*');
+                break;
+            case 'code':
+                $query->orderBy('employees.employee_code', $sortDir);
+                break;
+            default:
+                $query->leftJoin('designations', 'employees.designation_id', '=', 'designations.id')
+                      ->leftJoin('designation_categories', 'designations.category_id', '=', 'designation_categories.id')
+                      ->orderBy('designation_categories.name', $sortDir)
+                      ->select('employees.*');
+        }
+
+        $employees = $query->paginate(15);
         $sites = Site::orderBy('name')->get();
         $designations = Designation::active()->orderBy('name')->get();
+        $categories = DesignationCategory::active()->orderBy('name')->get();
 
-        return view('employees.index', compact('employees', 'sites', 'designations'));
+        return view('employees.index', compact('employees', 'sites', 'designations', 'categories'));
     }
 
     public function create()
     {
         $sites = Site::orderBy('name')->get();
+        $categories = DesignationCategory::active()->orderBy('name')->get();
         $designations = Designation::active()->orderBy('name')->get();
-        return view('employees.create', compact('sites', 'designations'));
+        return view('employees.create', compact('sites', 'categories', 'designations'));
     }
 
     public function store(Request $request)
@@ -102,9 +146,11 @@ class EmployeeController extends Controller
 
     public function edit(Employee $employee)
     {
+        $employee->load('designation.category');
         $sites = Site::orderBy('name')->get();
+        $categories = DesignationCategory::active()->orderBy('name')->get();
         $designations = Designation::active()->orderBy('name')->get();
-        return view('employees.edit', compact('employee', 'sites', 'designations'));
+        return view('employees.edit', compact('employee', 'sites', 'categories', 'designations'));
     }
 
     public function update(Request $request, Employee $employee)

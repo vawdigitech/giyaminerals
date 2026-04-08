@@ -59,6 +59,10 @@ class WorkSessionService
         foreach ($activeSessions as $session) {
             $session->end('checkout');
 
+            // Refresh the task assignment to get the updated hourly_rate_at_time
+            // that was set during the session end hook
+            $session->taskAssignment->refresh();
+
             $workSummary[] = [
                 'task_id' => $session->taskAssignment->task_id,
                 'task_name' => $session->taskAssignment->task->name,
@@ -73,6 +77,48 @@ class WorkSessionService
             'work_summary' => $workSummary,
             'total_hours' => collect($workSummary)->sum('hours_worked'),
             'total_cost' => collect($workSummary)->sum('cost'),
+        ];
+    }
+
+    /**
+     * Handle break start
+     * Pauses all active task sessions
+     */
+    public function handleBreakOut(Attendance $attendance): array
+    {
+        $activeSessions = $attendance->activeSessions()->with('taskAssignment.task.project')->get();
+
+        foreach ($activeSessions as $session) {
+            $session->end('break');
+        }
+
+        return [
+            'sessions_paused' => $activeSessions->count(),
+        ];
+    }
+
+    /**
+     * Handle break end
+     * Resumes sessions for all active task assignments
+     */
+    public function handleBreakIn(Attendance $attendance): array
+    {
+        $employee = $attendance->employee;
+        $sessionsStarted = [];
+
+        $activeAssignments = TaskAssignment::where('employee_id', $employee->id)
+            ->whereNull('removed_at')
+            ->get();
+
+        foreach ($activeAssignments as $assignment) {
+            $session = $this->startSession($assignment, $attendance);
+            if ($session) {
+                $sessionsStarted[] = $session;
+            }
+        }
+
+        return [
+            'sessions_resumed' => count($sessionsStarted),
         ];
     }
 

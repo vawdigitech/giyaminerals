@@ -44,6 +44,19 @@
                             </div>
 
                             <div class="form-group">
+                                <label for="category_id">Category</label>
+                                <select class="form-control @error('category_id') is-invalid @enderror" id="category_id" name="category_id">
+                                    <option value="">-- No Category --</option>
+                                    @foreach($categories as $category)
+                                        <option value="{{ $category->id }}" {{ old('category_id') == $category->id ? 'selected' : '' }}>{{ $category->name }}</option>
+                                    @endforeach
+                                </select>
+                                @error('category_id')
+                                    <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+
+                            <div class="form-group">
                                 <label for="description">Description</label>
                                 <textarea class="form-control @error('description') is-invalid @enderror"
                                     id="description" name="description" rows="3"

@@ -11,7 +11,7 @@
         <div class="card card-outline card-primary mb-3">
             <div class="card-body">
                 <form method="GET" action="{{ route('employees.index') }}" class="row g-3">
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <select name="site_id" class="form-control">
                             <option value="">All Sites</option>
                             @foreach($sites as $site)
@@ -29,6 +29,16 @@
                         </select>
                     </div>
                     <div class="col-md-2">
+                        <select name="category_id" class="form-control">
+                            <option value="">All Categories</option>
+                            @foreach($categories as $category)
+                                <option value="{{ $category->id }}" {{ request('category_id') == $category->id ? 'selected' : '' }}>
+                                    {{ $category->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-2">
                         <select name="designation_id" class="form-control">
                             <option value="">All Designations</option>
                             @foreach($designations as $designation)
@@ -38,7 +48,7 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <input type="text" name="search" class="form-control" placeholder="Search..." value="{{ request('search') }}">
                     </div>
                     <div class="col-md-2">
@@ -63,14 +73,65 @@
                         </div>
                     </div>
                     <div class="card-body">
+                        @php
+                            $currentSort = request('sort_by', 'category');
+                            $currentDir = request('sort_dir', 'asc');
+                            $nextDir = $currentDir === 'asc' ? 'desc' : 'asc';
+                        @endphp
                         <table class="table table-bordered table-striped">
                             <thead>
                                 <tr>
-                                    <th>Code</th>
-                                    <th>Name</th>
-                                    <th>Designation</th>
+                                    <th>
+                                        <a href="{{ request()->fullUrlWithQuery(['sort_by' => 'code', 'sort_dir' => $currentSort === 'code' ? $nextDir : 'asc']) }}" class="text-dark">
+                                            Code
+                                            @if($currentSort === 'code')
+                                                <i class="fas fa-sort-{{ $currentDir === 'asc' ? 'up' : 'down' }}"></i>
+                                            @else
+                                                <i class="fas fa-sort text-muted"></i>
+                                            @endif
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="{{ request()->fullUrlWithQuery(['sort_by' => 'name', 'sort_dir' => $currentSort === 'name' ? $nextDir : 'asc']) }}" class="text-dark">
+                                            Name
+                                            @if($currentSort === 'name')
+                                                <i class="fas fa-sort-{{ $currentDir === 'asc' ? 'up' : 'down' }}"></i>
+                                            @else
+                                                <i class="fas fa-sort text-muted"></i>
+                                            @endif
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="{{ request()->fullUrlWithQuery(['sort_by' => 'designation', 'sort_dir' => $currentSort === 'designation' ? $nextDir : 'asc']) }}" class="text-dark">
+                                            Designation
+                                            @if($currentSort === 'designation')
+                                                <i class="fas fa-sort-{{ $currentDir === 'asc' ? 'up' : 'down' }}"></i>
+                                            @else
+                                                <i class="fas fa-sort text-muted"></i>
+                                            @endif
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="{{ request()->fullUrlWithQuery(['sort_by' => 'category', 'sort_dir' => $currentSort === 'category' ? $nextDir : 'asc']) }}" class="text-dark">
+                                            Category
+                                            @if($currentSort === 'category')
+                                                <i class="fas fa-sort-{{ $currentDir === 'asc' ? 'up' : 'down' }}"></i>
+                                            @else
+                                                <i class="fas fa-sort text-muted"></i>
+                                            @endif
+                                        </a>
+                                    </th>
                                     <th>Phone</th>
-                                    <th>Site</th>
+                                    <th>
+                                        <a href="{{ request()->fullUrlWithQuery(['sort_by' => 'site', 'sort_dir' => $currentSort === 'site' ? $nextDir : 'asc']) }}" class="text-dark">
+                                            Site
+                                            @if($currentSort === 'site')
+                                                <i class="fas fa-sort-{{ $currentDir === 'asc' ? 'up' : 'down' }}"></i>
+                                            @else
+                                                <i class="fas fa-sort text-muted"></i>
+                                            @endif
+                                        </a>
+                                    </th>
                                     <th>Daily Rate</th>
                                     <th>Working Hours</th>
                                     <th>Status</th>
@@ -83,6 +144,7 @@
                                         <td>{{ $employee->employee_code }}</td>
                                         <td>{{ $employee->name }}</td>
                                         <td>{{ $employee->designation->name ?? '-' }}</td>
+                                        <td>{{ $employee->designation->category->name ?? '-' }}</td>
                                         <td>{{ $employee->phone ?? '-' }}</td>
                                         <td>{{ $employee->site->name ?? '-' }}</td>
                                         <td>₹{{ number_format($employee->daily_rate, 2) }}</td>
@@ -112,7 +174,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="8" class="text-center">No employees found.</td>
+                                        <td colspan="10" class="text-center">No employees found.</td>
                                     </tr>
                                 @endforelse
                             </tbody>

@@ -13,10 +13,12 @@ use App\Http\Controllers\Admin\EmployeeController;
 use App\Http\Controllers\Admin\ProjectController;
 use App\Http\Controllers\Admin\TaskController;
 use App\Http\Controllers\Admin\TaskStockUsageController;
+use App\Http\Controllers\Admin\TaskImportController;
 use App\Http\Controllers\Admin\AttendanceReportController;
 use App\Http\Controllers\Admin\IssueController;
 use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\DesignationController;
+use App\Http\Controllers\Admin\DesignationCategoryController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\SalaryController;
@@ -80,7 +82,7 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('permission:inventory.view')->group(function () {
-        Route::resource('products', ProductController::class)->only(['index', 'show']);
+        Route::resource('products', ProductController::class)->only(['index']);
         Route::resource('categories', ProductCategoryController::class)->only(['index', 'show']);
     });
     Route::middleware('permission:inventory.create')->group(function () {
@@ -98,11 +100,12 @@ Route::middleware('auth')->group(function () {
 
     // Sites Management
     Route::middleware('permission:sites.view')->group(function () {
-        Route::resource('sites', SiteController::class)->only(['index', 'show']);
+        Route::resource('sites', SiteController::class)->only(['index']);
         Route::get('sites/{site}/tasks', [StockController::class, 'getTasksBySite'])->name('sites.tasks');
         Route::get('tasks/{task}/subtasks', [StockController::class, 'getSubtasks'])->name('tasks.subtasks');
     });
     Route::middleware('permission:sites.create')->resource('sites', SiteController::class)->only(['create', 'store']);
+    Route::middleware('permission:sites.view')->resource('sites', SiteController::class)->only(['show']);
     Route::middleware('permission:sites.edit')->resource('sites', SiteController::class)->only(['edit', 'update']);
     Route::middleware('permission:sites.delete')->resource('sites', SiteController::class)->only(['destroy']);
 
@@ -135,7 +138,10 @@ Route::middleware('auth')->group(function () {
     Route::middleware('permission:employees.delete')->resource('employees', EmployeeController::class)->only(['destroy']);
 
     // Project Management
-    Route::middleware('permission:projects.create')->resource('projects', ProjectController::class)->only(['create', 'store']);
+    Route::middleware('permission:projects.create')->group(function () {
+        Route::resource('projects', ProjectController::class)->only(['create', 'store']);
+        Route::get('projects/generate-code', [ProjectController::class, 'generateCode'])->name('projects.generate-code');
+    });
     Route::middleware('permission:projects.view')->resource('projects', ProjectController::class)->only(['index', 'show']);
     Route::middleware('permission:projects.edit')->resource('projects', ProjectController::class)->only(['edit', 'update']);
     Route::middleware('permission:projects.delete')->resource('projects', ProjectController::class)->only(['destroy']);
@@ -145,6 +151,7 @@ Route::middleware('auth')->group(function () {
         Route::get('tasks', [TaskController::class, 'index'])->name('tasks.index');
         Route::get('tasks/{task}', [TaskController::class, 'show'])->name('tasks.show')->where('task', '[0-9]+');
         Route::get('tasks-by-project/{project}', [TaskController::class, 'getByProject'])->name('tasks.by-project');
+        Route::get('tasks/suggest-code', [TaskController::class, 'suggestCode'])->name('tasks.suggest-code');
         Route::get('tasks/{task}/materials', [TaskStockUsageController::class, 'index'])->name('tasks.materials.index');
         Route::get('tasks/{task}/materials/available-stock', [TaskStockUsageController::class, 'availableStock'])->name('tasks.materials.available-stock');
         Route::get('materials/return-destinations', [TaskStockUsageController::class, 'getReturnDestinations'])->name('materials.return-destinations');
@@ -153,6 +160,9 @@ Route::middleware('auth')->group(function () {
         Route::get('tasks/create', [TaskController::class, 'create'])->name('tasks.create');
         Route::post('tasks', [TaskController::class, 'store'])->name('tasks.store');
         Route::post('tasks/{task}/materials', [TaskStockUsageController::class, 'store'])->name('tasks.materials.store');
+        Route::get('tasks/import', [TaskImportController::class, 'showImport'])->name('tasks.import');
+        Route::get('tasks/import/template', [TaskImportController::class, 'downloadTemplate'])->name('tasks.import.template');
+        Route::post('tasks/import', [TaskImportController::class, 'import'])->name('tasks.import.submit');
     });
     Route::middleware('permission:tasks.edit')->group(function () {
         Route::get('tasks/{task}/edit', [TaskController::class, 'edit'])->name('tasks.edit');
@@ -171,8 +181,21 @@ Route::middleware('auth')->group(function () {
         Route::get('attendance/daily', [AttendanceReportController::class, 'daily'])->name('attendance.daily');
         Route::get('attendance/employee/{employee}', [AttendanceReportController::class, 'employeeReport'])->name('attendance.employee');
     });
+    Route::middleware('permission:attendance.create')->group(function () {
+        Route::get('attendance/create', [AttendanceReportController::class, 'create'])->name('attendance.create');
+        Route::post('attendance', [AttendanceReportController::class, 'store'])->name('attendance.store');
+    });
+    Route::middleware('permission:attendance.edit')->group(function () {
+        Route::get('attendance/{attendance}/edit', [AttendanceReportController::class, 'edit'])->name('attendance.edit');
+        Route::put('attendance/{attendance}', [AttendanceReportController::class, 'update'])->name('attendance.update');
+    });
+    Route::middleware('permission:attendance.delete')->group(function () {
+        Route::delete('attendance/{attendance}', [AttendanceReportController::class, 'destroy'])->name('attendance.destroy');
+    });
     Route::middleware('permission:attendance.export')->group(function () {
         Route::get('attendance/export', [AttendanceReportController::class, 'export'])->name('attendance.export');
+        Route::get('attendance/template', [AttendanceReportController::class, 'downloadTemplate'])->name('attendance.template');
+        Route::post('attendance/import', [AttendanceReportController::class, 'import'])->name('attendance.import');
     });
 
     // Salary Management
@@ -220,7 +243,14 @@ Route::middleware('auth')->group(function () {
         Route::get('analytics/work-progress', [AnalyticsController::class, 'workProgress'])->name('analytics.work-progress');
     });
 
+    // Administration - Designation Categories
+    Route::middleware('permission:designation_categories.view')->resource('designation-categories', DesignationCategoryController::class)->only(['index']);
+    Route::middleware('permission:designation_categories.create')->resource('designation-categories', DesignationCategoryController::class)->only(['create', 'store']);
+    Route::middleware('permission:designation_categories.edit')->resource('designation-categories', DesignationCategoryController::class)->only(['edit', 'update']);
+    Route::middleware('permission:designation_categories.delete')->resource('designation-categories', DesignationCategoryController::class)->only(['destroy']);
+
     // Administration - Designations
+    Route::get('designations/by-category/{id}', [DesignationController::class, 'byCategory'])->name('designations.by-category');
     Route::middleware('permission:designations.view')->resource('designations', DesignationController::class)->only(['index']);
     Route::middleware('permission:designations.create')->resource('designations', DesignationController::class)->only(['create', 'store']);
     Route::middleware('permission:designations.edit')->resource('designations', DesignationController::class)->only(['edit', 'update']);

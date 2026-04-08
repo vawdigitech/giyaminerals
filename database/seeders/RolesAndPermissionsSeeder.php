@@ -28,6 +28,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'reports' => ['view'],
             'analytics' => ['view'],
             'issues' => ['view', 'create', 'edit', 'delete'],
+            'designation_categories' => ['view', 'create', 'edit', 'delete'],
             'designations' => ['view', 'create', 'edit', 'delete'],
             'roles' => ['view', 'create', 'edit', 'delete'],
             'users' => ['view', 'create', 'edit', 'delete'],
@@ -72,6 +73,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'reports.view',
             'analytics.view',
             'issues.view', 'issues.create', 'issues.edit',
+            'designation_categories.view',
             'designations.view',
         ];
         $supervisorRole->syncPermissions($supervisorPermissions);

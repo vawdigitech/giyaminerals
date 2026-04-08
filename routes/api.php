@@ -36,6 +36,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
 
+    // Designation Categories
+    Route::get('/designation-categories', [DesignationController::class, 'categories']);
+    Route::get('/designation-categories/{id}/designations', [DesignationController::class, 'byCategory']);
+
     // Designations
     Route::get('/designations', [DesignationController::class, 'index']);
     Route::get('/designations/{designation}', [DesignationController::class, 'show']);
@@ -54,6 +58,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/attendance/{attendance}', [AttendanceController::class, 'show']);
     Route::post('/attendance/check-in', [AttendanceController::class, 'checkIn']);
     Route::post('/attendance/{attendance}/check-out', [AttendanceController::class, 'checkOut']);
+    Route::post('/attendance/{attendance}/break-out', [AttendanceController::class, 'breakOut']);
+    Route::post('/attendance/{attendance}/break-in', [AttendanceController::class, 'breakIn']);
     Route::get('/employees/{employee}/attendance-history', [AttendanceController::class, 'employeeHistory']);
 
     // Projects
@@ -66,6 +72,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/tasks', [TaskController::class, 'index']);
     Route::get('/tasks/sections', [TaskController::class, 'sections']);
     Route::get('/tasks/parents', [TaskController::class, 'getParentTasks']);
+    Route::get('/tasks/suggest-code', [TaskController::class, 'suggestCode']);
     Route::post('/tasks', [TaskController::class, 'store']);
     Route::get('/tasks/{task}', [TaskController::class, 'show']);
     Route::post('/tasks/{task}/update-progress', [TaskController::class, 'updateProgress']);

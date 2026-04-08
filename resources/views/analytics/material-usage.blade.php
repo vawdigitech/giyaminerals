@@ -30,7 +30,7 @@
             <div class="col-lg-3 col-6">
                 <div class="small-box bg-warning">
                     <div class="inner">
-                        <h3>${{ number_format($summary['total_cost'], 0) }}</h3>
+                        <h3>₹{{ number_format($summary['total_cost'], 0) }}</h3>
                         <p>Total Material Cost</p>
                     </div>
                     <div class="icon"><i class="fas fa-dollar-sign"></i></div>
@@ -99,7 +99,7 @@
                                     <tr>
                                         <td>{{ $data['product']->name ?? 'Unknown' }}</td>
                                         <td class="text-right">{{ number_format($data['total_quantity'], 2) }}</td>
-                                        <td class="text-right">${{ number_format($data['total_cost'], 2) }}</td>
+                                        <td class="text-right">₹{{ number_format($data['total_cost'], 2) }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -132,7 +132,7 @@
                                             </a>
                                         </td>
                                         <td class="text-right">{{ $data['items_count'] }}</td>
-                                        <td class="text-right">${{ number_format($data['total_cost'], 2) }}</td>
+                                        <td class="text-right">₹{{ number_format($data['total_cost'], 2) }}</td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -168,8 +168,8 @@
                                 <td>{{ $usage->task->name ?? '-' }}</td>
                                 <td>{{ $usage->task->project->name ?? '-' }}</td>
                                 <td class="text-right">{{ number_format($usage->quantity, 2) }}</td>
-                                <td class="text-right">${{ number_format($usage->unit_price, 2) }}</td>
-                                <td class="text-right">${{ number_format($usage->total_cost, 2) }}</td>
+                                <td class="text-right">₹{{ number_format($usage->unit_price, 2) }}</td>
+                                <td class="text-right">₹{{ number_format($usage->total_cost, 2) }}</td>
                             </tr>
                         @empty
                             <tr>

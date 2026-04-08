@@ -16,6 +16,7 @@
                     </div>
                     <form method="POST" action="{{ route('employees.store') }}" enctype="multipart/form-data">
                         @csrf
+                        <input type="hidden" name="employment_type" value="temporary">
                         <div class="card-body">
                             <div class="row">
                                 <div class="col-md-6">
@@ -30,15 +31,36 @@
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-group">
+                                        <label for="phone">Phone Number</label>
+                                        <input type="text" class="form-control @error('phone') is-invalid @enderror"
+                                            id="phone" name="phone" value="{{ old('phone') }}">
+                                        @error('phone')
+                                            <span class="invalid-feedback">{{ $message }}</span>
+                                        @enderror
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="category_id">Designation Category <span class="text-danger">*</span></label>
+                                        <select class="form-control" id="category_id" name="category_id" required>
+                                            <option value="">-- Select Category --</option>
+                                            @foreach($categories as $category)
+                                                <option value="{{ $category->id }}" {{ old('category_id') == $category->id ? 'selected' : '' }}>
+                                                    {{ $category->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
                                         <label for="designation_id">Designation <span class="text-danger">*</span></label>
                                         <select class="form-control @error('designation_id') is-invalid @enderror"
                                             id="designation_id" name="designation_id" required>
                                             <option value="">-- Select Designation --</option>
-                                            @foreach($designations as $designation)
-                                                <option value="{{ $designation->id }}" data-code="{{ $designation->code }}" {{ old('designation_id') == $designation->id ? 'selected' : '' }}>
-                                                    {{ $designation->name }}
-                                                </option>
-                                            @endforeach
                                         </select>
                                         @error('designation_id')
                                             <span class="invalid-feedback">{{ $message }}</span>
@@ -49,16 +71,6 @@
                             </div>
 
                             <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label for="phone">Phone Number</label>
-                                        <input type="text" class="form-control @error('phone') is-invalid @enderror"
-                                            id="phone" name="phone" value="{{ old('phone') }}">
-                                        @error('phone')
-                                            <span class="invalid-feedback">{{ $message }}</span>
-                                        @enderror
-                                    </div>
-                                </div>
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label for="photo">Photo</label>
@@ -73,23 +85,6 @@
                                         <div id="photo-preview" class="mt-2" style="display: none;">
                                             <img id="preview-image" src="" alt="Preview" style="max-width: 150px; max-height: 150px; border-radius: 8px;">
                                         </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label for="employment_type">Employment Type <span class="text-danger">*</span></label>
-                                        <select class="form-control @error('employment_type') is-invalid @enderror"
-                                            id="employment_type" name="employment_type" required>
-                                            <option value="permanent" {{ old('employment_type', 'permanent') == 'permanent' ? 'selected' : '' }}>Permanent</option>
-                                            <option value="contract" {{ old('employment_type') == 'contract' ? 'selected' : '' }}>Contract</option>
-                                            <option value="temporary" {{ old('employment_type') == 'temporary' ? 'selected' : '' }}>Temporary</option>
-                                        </select>
-                                        @error('employment_type')
-                                            <span class="invalid-feedback">{{ $message }}</span>
-                                        @enderror
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -161,7 +156,7 @@
 </section>
 @endsection
 
-@section('scripts')
+@push('scripts')
 <script>
     // File input label update
     document.getElementById('photo').addEventListener('change', function(e) {
@@ -169,7 +164,6 @@
         var label = this.nextElementSibling;
         label.textContent = fileName;
 
-        // Show preview
         if (e.target.files[0]) {
             var reader = new FileReader();
             reader.onload = function(event) {
@@ -181,5 +175,48 @@
             document.getElementById('photo-preview').style.display = 'none';
         }
     });
+
+    const categorySelect = document.getElementById('category_id');
+    const designationSelect = document.getElementById('designation_id');
+    const oldDesignationId = "{{ old('designation_id') }}";
+
+    function loadDesignations(categoryId) {
+        designationSelect.innerHTML = '<option value="">-- Loading... --</option>';
+        designationSelect.disabled = true;
+
+        fetch(`/designations/by-category/${categoryId}`)
+            .then(response => response.json())
+            .then(function(designations) {
+                designationSelect.innerHTML = '<option value="">-- Select Designation --</option>';
+                designations.forEach(function(d) {
+                    const option = document.createElement('option');
+                    option.value = d.id;
+                    option.setAttribute('data-code', d.code);
+                    option.textContent = d.name;
+                    if (oldDesignationId && oldDesignationId == d.id) {
+                        option.selected = true;
+                    }
+                    designationSelect.appendChild(option);
+                });
+                designationSelect.disabled = false;
+            })
+            .catch(function() {
+                designationSelect.innerHTML = '<option value="">-- Error loading --</option>';
+                designationSelect.disabled = false;
+            });
+    }
+
+    categorySelect.addEventListener('change', function() {
+        if (this.value) {
+            loadDesignations(this.value);
+        } else {
+            designationSelect.innerHTML = '<option value="">-- Select Designation --</option>';
+        }
+    });
+
+    // On page load, restore state after validation error
+    if (categorySelect.value) {
+        loadDesignations(categorySelect.value);
+    }
 </script>
-@endsection
+@endpush

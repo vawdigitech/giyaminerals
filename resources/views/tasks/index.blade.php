@@ -3,38 +3,44 @@
 
 @push('styles')
 <style>
-    /* Master Task Styling */
-    .master-task-row {
-        background-color: #f8f9fa;
-        border-left: 4px solid #007bff;
-    }
-    .master-task-row td:first-child {
-        font-weight: 600;
-    }
+    .project-card { margin-bottom: 1rem; border: 1px solid #dee2e6; border-radius: 6px; overflow: hidden; }
 
-    /* Subtask Styling */
-    .subtask-row {
-        background-color: #fff;
-        border-left: 4px solid #e9ecef;
+    .project-header {
+        background: linear-gradient(135deg, #1a3c6e 0%, #2c5f9e 100%);
+        color: #fff;
+        padding: 12px 16px;
+        cursor: pointer;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        gap: 12px;
     }
-    .subtask-row td {
-        padding-left: 1.5rem !important;
-    }
-    .subtask-row td:first-child {
-        padding-left: 2rem !important;
-    }
+    .project-header:hover { background: linear-gradient(135deg, #14305a 0%, #254e87 100%); }
+    .project-header .toggle-icon { transition: transform .25s; font-size: 13px; }
+    .project-header.collapsed .toggle-icon { transform: rotate(-90deg); }
 
-    /* Subtask connector styling */
-    .subtask-connector {
-        color: #6c757d;
-        font-family: monospace;
-        margin-right: 5px;
-    }
+    .project-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+    .project-meta .badge { font-size: 11px; }
 
-    /* Visual separation between task groups */
-    .master-task-row td {
-        border-top: 2px solid #dee2e6;
-    }
+    .task-table { margin: 0; }
+    .task-table thead th { background: #f4f6f9; font-size: 12px; text-transform: uppercase; letter-spacing: .4px; padding: 8px 10px; border-bottom: 2px solid #dee2e6; }
+
+    /* Master task row */
+    .master-row { background: #f8fafd; border-left: 4px solid #2c5f9e; }
+    .master-row td { font-weight: 600; padding: 9px 10px; }
+
+    /* Subtask row */
+    .sub-row { background: #fff; border-left: 4px solid #e0e8f5; }
+    .sub-row td { padding: 7px 10px; font-size: 13px; }
+    .sub-indent { padding-left: 28px !important; color: #495057; }
+    .sub-connector { color: #adb5bd; font-family: monospace; margin-right: 4px; }
+
+    .progress-col { min-width: 90px; }
+    .cost-col { white-space: nowrap; }
+
+    .section-tag { background: #e9ecef; color: #495057; border-radius: 3px; padding: 1px 6px; font-size: 11px; }
+
+    .empty-project { text-align: center; color: #adb5bd; padding: 18px; font-style: italic; }
 </style>
 @endpush
 
@@ -42,156 +48,314 @@
     <li class="breadcrumb-item"><a href="{{ route('dashboard.index') }}">Dashboard</a></li>
     <li class="breadcrumb-item active">Tasks</li>
 @endsection
+
 @section('content')
 <section class="content">
     <div class="container-fluid">
+
+        @if(session('import_errors') && count(session('import_errors')) > 0)
+            <div class="alert alert-warning alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                <strong>Import row errors ({{ count(session('import_errors')) }}):</strong>
+                <ul class="mb-0 mt-1" style="font-size:13px;">
+                    @foreach(session('import_errors') as $err)<li>{{ $err }}</li>@endforeach
+                </ul>
+            </div>
+        @endif
+
         <!-- Filters -->
         <div class="card card-outline card-primary mb-3">
-            <div class="card-body">
-                <form method="GET" action="{{ route('tasks.index') }}" class="row g-3">
-                    <div class="col-md-3">
-                        <select name="project_id" class="form-control">
-                            <option value="">All Projects</option>
-                            @foreach($projects as $project)
-                                <option value="{{ $project->id }}" {{ request('project_id') == $project->id ? 'selected' : '' }}>
-                                    {{ $project->code }} - {{ $project->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <select name="status" class="form-control">
-                            <option value="">All Status</option>
-                            <option value="pending" {{ request('status') == 'pending' ? 'selected' : '' }}>Pending</option>
-                            <option value="in_progress" {{ request('status') == 'in_progress' ? 'selected' : '' }}>In Progress</option>
-                            <option value="completed" {{ request('status') == 'completed' ? 'selected' : '' }}>Completed</option>
-                            <option value="on_hold" {{ request('status') == 'on_hold' ? 'selected' : '' }}>On Hold</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <select name="priority" class="form-control">
-                            <option value="">All Priority</option>
-                            <option value="low" {{ request('priority') == 'low' ? 'selected' : '' }}>Low</option>
-                            <option value="medium" {{ request('priority') == 'medium' ? 'selected' : '' }}>Medium</option>
-                            <option value="high" {{ request('priority') == 'high' ? 'selected' : '' }}>High</option>
-                            <option value="critical" {{ request('priority') == 'critical' ? 'selected' : '' }}>Critical</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <input type="text" name="search" class="form-control" placeholder="Search..." value="{{ request('search') }}">
-                    </div>
-                    <div class="col-md-3">
-                        <button type="submit" class="btn btn-primary">Filter</button>
-                        <a href="{{ route('tasks.index') }}" class="btn btn-secondary">Reset</a>
-                        @can('tasks.create')
-                        <a href="{{ route('tasks.create') }}" class="btn btn-success">
-                            <i class="fas fa-plus"></i> New Task
+            <div class="card-body py-2">
+                <form method="GET" action="{{ route('tasks.index') }}" class="form-inline flex-wrap" style="gap:8px;">
+                    <select name="project_id" class="form-control form-control-sm">
+                        <option value="">All Projects</option>
+                        @foreach($projects as $p)
+                            <option value="{{ $p->id }}" {{ request('project_id') == $p->id ? 'selected' : '' }}>
+                                {{ $p->code }} — {{ $p->name }}
+                            </option>
+                        @endforeach
+                    </select>
+
+                    <select name="status" class="form-control form-control-sm">
+                        <option value="">All Status</option>
+                        <option value="pending"     {{ request('status') == 'pending'     ? 'selected' : '' }}>Pending</option>
+                        <option value="in_progress" {{ request('status') == 'in_progress' ? 'selected' : '' }}>In Progress</option>
+                        <option value="completed"   {{ request('status') == 'completed'   ? 'selected' : '' }}>Completed</option>
+                        <option value="on_hold"     {{ request('status') == 'on_hold'     ? 'selected' : '' }}>On Hold</option>
+                    </select>
+
+                    <select name="priority" class="form-control form-control-sm">
+                        <option value="">All Priority</option>
+                        <option value="low"      {{ request('priority') == 'low'      ? 'selected' : '' }}>Low</option>
+                        <option value="medium"   {{ request('priority') == 'medium'   ? 'selected' : '' }}>Medium</option>
+                        <option value="high"     {{ request('priority') == 'high'     ? 'selected' : '' }}>High</option>
+                        <option value="critical" {{ request('priority') == 'critical' ? 'selected' : '' }}>Critical</option>
+                    </select>
+
+                    <input type="text" name="search" class="form-control form-control-sm"
+                           placeholder="Search tasks..." value="{{ request('search') }}" style="min-width:160px;">
+
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-filter mr-1"></i>Filter</button>
+                    <a href="{{ route('tasks.index') }}" class="btn btn-sm btn-secondary">Reset</a>
+
+                    @can('tasks.create')
+                        <a href="{{ route('tasks.create') }}" class="btn btn-sm btn-success ml-auto">
+                            <i class="fas fa-plus mr-1"></i>New Task
                         </a>
-                        @endcan
-                    </div>
+                        <a href="{{ route('tasks.import') }}" class="btn btn-sm btn-info">
+                            <i class="fas fa-file-import mr-1"></i>Import Tasks
+                        </a>
+                    @endcan
                 </form>
             </div>
         </div>
 
-        <!-- Tasks Table -->
-        <div class="card">
-            <div class="card-header">
-                <h3 class="card-title">Tasks List</h3>
+        <!-- Collapse / Expand All -->
+        @if($grouped->count() > 1)
+        <div class="mb-2 text-right">
+            <button class="btn btn-xs btn-outline-secondary" id="expandAll">
+                <i class="fas fa-expand-alt mr-1"></i>Expand All
+            </button>
+            <button class="btn btn-xs btn-outline-secondary ml-1" id="collapseAll">
+                <i class="fas fa-compress-alt mr-1"></i>Collapse All
+            </button>
+        </div>
+        @endif
+
+        @forelse($grouped as $project)
+        @php
+            $totalTasks     = $project->tasks->count();
+            $completedCount = $project->tasks->where('status', 'completed')->count();
+            $inProgCount    = $project->tasks->where('status', 'in_progress')->count();
+            $pendingCount   = $project->tasks->where('status', 'pending')->count();
+            $pProgress      = $project->progress ?? 0;
+            $statusColors   = ['pending'=>'secondary','in_progress'=>'primary','completed'=>'success','on_hold'=>'warning'];
+            $pColor         = $statusColors[$project->status] ?? 'secondary';
+            $isFiltered     = request()->hasAny(['project_id','status','priority','search']);
+            $collapseId     = 'proj-' . $project->id;
+        @endphp
+
+        <div class="project-card">
+            <!-- Project Header -->
+            <div class="project-header {{ $isFiltered ? '' : '' }}"
+                 data-toggle="collapse" data-target="#{{ $collapseId }}" aria-expanded="true">
+
+                <i class="fas fa-chevron-down toggle-icon"></i>
+
+                <div>
+                    <span style="font-size:15px; font-weight:700;">{{ $project->name }}</span>
+                    <span style="font-size:12px; opacity:.8; margin-left:8px;">{{ $project->code }}</span>
+                </div>
+
+                @if($project->site)
+                    <span style="font-size:12px; opacity:.75;"><i class="fas fa-map-marker-alt mr-1"></i>{{ $project->site->name }}</span>
+                @endif
+
+                <!-- Progress bar -->
+                <div style="flex:1; max-width:160px; min-width:80px;">
+                    <div class="progress" style="height:7px; background:rgba(255,255,255,.25);">
+                        <div class="progress-bar bg-{{ $pProgress >= 100 ? 'success' : 'warning' }}"
+                             style="width:{{ $pProgress }}%;"></div>
+                    </div>
+                    <div style="font-size:11px; opacity:.8; margin-top:2px;">{{ $pProgress }}% complete</div>
+                </div>
+
+                <div class="project-meta">
+                    <span class="badge badge-light text-dark">{{ $totalTasks }} task{{ $totalTasks != 1 ? 's' : '' }}</span>
+                    @if($completedCount) <span class="badge badge-success">{{ $completedCount }} done</span> @endif
+                    @if($inProgCount)    <span class="badge badge-primary">{{ $inProgCount }} active</span> @endif
+                    @if($pendingCount)   <span class="badge badge-secondary">{{ $pendingCount }} pending</span> @endif
+                    <span class="badge badge-{{ $pColor }} text-uppercase" style="font-size:10px;">
+                        {{ str_replace('_',' ', $project->status) }}
+                    </span>
+                    <a href="{{ route('projects.show', $project) }}"
+                       class="btn btn-xs btn-light text-dark" style="font-size:11px;"
+                       onclick="event.stopPropagation();">
+                        <i class="fas fa-external-link-alt"></i> Project
+                    </a>
+                </div>
             </div>
-            <div class="card-body table-responsive">
-                <table class="table table-bordered">
-                    <thead class="thead-dark">
+
+            <!-- Tasks Body -->
+            <div id="{{ $collapseId }}" class="collapse show">
+                @if($project->tasks->isEmpty())
+                    <div class="empty-project">No tasks match the current filters.</div>
+                @else
+                <div class="table-responsive">
+                <table class="table task-table mb-0">
+                    <thead>
                         <tr>
-                            <th>Code</th>
+                            <th style="width:110px;">Code</th>
                             <th>Task Name</th>
-                            <th>Project</th>
                             <th>Section</th>
-                            <th>Progress</th>
+                            <th class="cost-col">Quoted Amount</th>
+                            <th class="progress-col">Progress</th>
                             <th>Priority</th>
                             <th>Status</th>
-                            <th>Labor Cost</th>
-                            <th>Material Cost</th>
-                            <th>Actions</th>
+                            <th class="cost-col">Labor Cost</th>
+                            <th class="cost-col">Material Cost</th>
+                            <th style="width:90px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse($tasks as $task)
-                            @if(!$task->parent_id)
-                            {{-- Master Task Row --}}
-                            <tr class="master-task-row">
-                                <td class="font-weight-bold">
-                                    @if($task->subtasks_count > 0)
-                                        <i class="fas fa-folder-open text-warning mr-1"></i>
-                                    @else
-                                        <i class="fas fa-tasks text-secondary mr-1"></i>
-                                    @endif
-                                    {{ $task->code }}
-                                </td>
-                                <td class="font-weight-bold">{{ $task->name }}</td>
-                            @else
-                            {{-- Subtask Row --}}
-                            <tr class="subtask-row">
-                                <td class="pl-4">
-                                    <span class="subtask-connector">└─</span>
-                                    <span class="text-muted">{{ $task->code }}</span>
-                                </td>
-                                <td class="pl-3">
-                                    <small>{{ $task->name }}</small>
-                                </td>
-                            @endif
-                                <td>
-                                    <a href="{{ route('projects.show', $task->project) }}">
-                                        {{ $task->project->code ?? '-' }}
-                                    </a>
-                                </td>
-                                <td>{{ $task->section ?? '-' }}</td>
-                                <td>
-                                    <div class="progress progress-sm">
-                                        <div class="progress-bar bg-primary" style="width: {{ $task->progress }}%"></div>
-                                    </div>
-                                    <small>{{ $task->progress }}%</small>
-                                </td>
-                                <td>
-                                    @php
-                                        $priorityColors = ['low' => 'info', 'medium' => 'warning', 'high' => 'danger', 'critical' => 'purple'];
-                                    @endphp
-                                    <span class="badge badge-{{ $priorityColors[$task->priority] ?? 'secondary' }}">
-                                        {{ ucfirst($task->priority) }}
-                                    </span>
-                                </td>
-                                <td>
-                                    @php
-                                        $statusColors = ['pending' => 'secondary', 'in_progress' => 'primary', 'completed' => 'success', 'on_hold' => 'warning'];
-                                    @endphp
-                                    <span class="badge badge-{{ $statusColors[$task->status] ?? 'secondary' }}">
-                                        {{ ucwords(str_replace('_', ' ', $task->status)) }}
-                                    </span>
-                                </td>
-                                <td>${{ number_format($task->labor_cost, 2) }}</td>
-                                <td>${{ number_format($task->material_cost, 2) }}</td>
-                                <td>
-                                    <a href="{{ route('tasks.show', $task) }}" class="btn btn-sm btn-info" title="View">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
-                                    @can('tasks.edit')
-                                    <a href="{{ route('tasks.edit', $task) }}" class="btn btn-sm btn-warning" title="Edit">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
-                                    @endcan
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="10" class="text-center">No tasks found.</td>
-                            </tr>
-                        @endforelse
+                    @foreach($project->tasks as $task)
+                        @php
+                            $priorityColors = ['low'=>'info','medium'=>'warning','high'=>'danger','critical'=>'dark'];
+                            $laborCost    = $task->subtasks_count > 0 ? ($task->aggregated_labor_cost ?? 0)    : ($task->labor_cost ?? 0);
+                            $materialCost = $task->subtasks_count > 0 ? ($task->aggregated_material_cost ?? 0) : ($task->material_cost ?? 0);
+                        @endphp
+                        {{-- Master Task --}}
+                        <tr class="master-row">
+                            <td>
+                                @if($task->subtasks_count > 0)
+                                    <i class="fas fa-folder text-warning mr-1"></i>
+                                @else
+                                    <i class="fas fa-circle text-primary mr-1" style="font-size:8px;vertical-align:middle;"></i>
+                                @endif
+                                <a href="{{ route('tasks.show', $task) }}" class="text-dark">{{ $task->code }}</a>
+                            </td>
+                            <td>
+                                <a href="{{ route('tasks.show', $task) }}" class="text-dark">{{ $task->name }}</a>
+                                @if($task->subtasks_count > 0)
+                                    <small class="text-muted ml-1">({{ $task->subtasks_count }} sub)</small>
+                                @endif
+                            </td>
+                            <td>
+                                @if($task->section)
+                                    <span class="section-tag">{{ $task->section }}</span>
+                                @else <span class="text-muted">—</span>
+                                @endif
+                            </td>
+                            <td class="cost-col">
+                                @php
+                                    $displayQuoted = $task->subtasks_count > 0 ? $task->aggregated_quoted_amount : $task->quoted_amount;
+                                @endphp
+                                @if($displayQuoted)
+                                    ₹{{ number_format($displayQuoted, 2) }}
+                                @else
+                                    <span class="text-muted">—</span>
+                                @endif
+                            </td>
+                            <td class="progress-col">
+                                <div class="progress progress-sm mb-1">
+                                    <div class="progress-bar bg-{{ $task->progress >= 100 ? 'success' : 'primary' }}"
+                                         style="width:{{ $task->progress }}%"></div>
+                                </div>
+                                <small class="text-muted">{{ $task->progress }}%</small>
+                            </td>
+                            <td>
+                                <span class="badge badge-{{ $priorityColors[$task->priority] ?? 'secondary' }}">
+                                    {{ ucfirst($task->priority) }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge badge-{{ $statusColors[$task->status] ?? 'secondary' }}">
+                                    {{ ucwords(str_replace('_',' ', $task->status)) }}
+                                </span>
+                            </td>
+                            <td class="cost-col">₹{{ number_format($laborCost, 2) }}</td>
+                            <td class="cost-col">₹{{ number_format($materialCost, 2) }}</td>
+                            <td>
+                                <a href="{{ route('tasks.show', $task) }}" class="btn btn-xs btn-info" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                @can('tasks.edit')
+                                <a href="{{ route('tasks.edit', $task) }}" class="btn btn-xs btn-warning" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                @endcan
+                            </td>
+                        </tr>
+
+                        {{-- Subtasks --}}
+                        @foreach($task->subtasks as $sub)
+                        <tr class="sub-row">
+                            <td class="sub-indent">
+                                <span class="sub-connector">└─</span>
+                                <a href="{{ route('tasks.show', $sub) }}" class="text-secondary">{{ $sub->code }}</a>
+                            </td>
+                            <td>
+                                <a href="{{ route('tasks.show', $sub) }}" class="text-secondary">{{ $sub->name }}</a>
+                            </td>
+                            <td>
+                                @if($sub->section)
+                                    <span class="section-tag">{{ $sub->section }}</span>
+                                @else <span class="text-muted">—</span>
+                                @endif
+                            </td>
+                            <td class="cost-col text-muted">
+                                @if($sub->quoted_amount)
+                                    ₹{{ number_format($sub->quoted_amount, 2) }}
+                                @else
+                                    —
+                                @endif
+                            </td>
+                            <td class="progress-col">
+                                <div class="progress progress-xs mb-1">
+                                    <div class="progress-bar bg-{{ $sub->progress >= 100 ? 'success' : 'info' }}"
+                                         style="width:{{ $sub->progress }}%"></div>
+                                </div>
+                                <small class="text-muted">{{ $sub->progress }}%</small>
+                            </td>
+                            <td>
+                                <span class="badge badge-{{ $priorityColors[$sub->priority] ?? 'secondary' }}" style="font-size:10px;">
+                                    {{ ucfirst($sub->priority) }}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge badge-{{ $statusColors[$sub->status] ?? 'secondary' }}" style="font-size:10px;">
+                                    {{ ucwords(str_replace('_',' ', $sub->status)) }}
+                                </span>
+                            </td>
+                            <td class="cost-col text-muted">₹{{ number_format($sub->labor_cost ?? 0, 2) }}</td>
+                            <td class="cost-col text-muted">₹{{ number_format($sub->material_cost ?? 0, 2) }}</td>
+                            <td>
+                                <a href="{{ route('tasks.show', $sub) }}" class="btn btn-xs btn-info" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                @can('tasks.edit')
+                                <a href="{{ route('tasks.edit', $sub) }}" class="btn btn-xs btn-warning" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                @endcan
+                            </td>
+                        </tr>
+                        @endforeach
+
+                    @endforeach
                     </tbody>
+
+                    {{-- Project totals footer --}}
+                    @php
+                        $projQuotedTotal   = $project->tasks->sum('quoted_amount');
+                        $projLaborTotal    = $project->tasks->sum('labor_cost');
+                        $projMaterialTotal = $project->tasks->sum('material_cost');
+                    @endphp
+                    <tfoot>
+                        <tr style="background:#f4f6f9; font-weight:600; font-size:12px;">
+                            <td colspan="3" class="text-right text-muted">Project Totals:</td>
+                            <td class="cost-col">₹{{ number_format($projQuotedTotal, 2) }}</td>
+                            <td colspan="3"></td>
+                            <td class="cost-col">₹{{ number_format($projLaborTotal, 2) }}</td>
+                            <td class="cost-col">₹{{ number_format($projMaterialTotal, 2) }}</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
                 </table>
-                <div class="mt-3">
-                    {{ $tasks->withQueryString()->links() }}
                 </div>
+                @endif
             </div>
         </div>
+        @empty
+            <div class="card">
+                <div class="card-body text-center text-muted py-5">
+                    <i class="fas fa-tasks fa-3x mb-3 d-block" style="opacity:.3;"></i>
+                    No tasks found. <a href="{{ route('tasks.create') }}">Create one</a> or
+                    <a href="{{ route('tasks.import') }}">import from Excel</a>.
+                </div>
+            </div>
+        @endforelse
+
     </div>
 </section>
 @endsection
@@ -203,5 +367,42 @@
     @elseif(session('error'))
         toastr.error(@json(session('error')));
     @endif
+
+    // Toggle icon direction on collapse
+    document.querySelectorAll('[data-toggle="collapse"]').forEach(function (header) {
+        var target = document.querySelector(header.dataset.target);
+        if (!target) return;
+
+        // Sync icon on load
+        function syncIcon() {
+            if (target.classList.contains('show')) {
+                header.classList.remove('collapsed');
+            } else {
+                header.classList.add('collapsed');
+            }
+        }
+        syncIcon();
+
+        target.addEventListener('shown.bs.collapse',  syncIcon);
+        target.addEventListener('hidden.bs.collapse', syncIcon);
+    });
+
+    // Expand / Collapse all
+    var expandBtn   = document.getElementById('expandAll');
+    var collapseBtn = document.getElementById('collapseAll');
+    if (expandBtn) {
+        expandBtn.addEventListener('click', function () {
+            document.querySelectorAll('.collapse').forEach(function (el) {
+                $(el).collapse('show');
+            });
+        });
+    }
+    if (collapseBtn) {
+        collapseBtn.addEventListener('click', function () {
+            document.querySelectorAll('.collapse').forEach(function (el) {
+                $(el).collapse('hide');
+            });
+        });
+    }
 </script>
 @endpush

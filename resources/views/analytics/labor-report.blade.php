@@ -30,7 +30,7 @@
             <div class="col-lg-3 col-6">
                 <div class="small-box bg-warning">
                     <div class="inner">
-                        <h3>${{ number_format($summary['total_cost'], 0) }}</h3>
+                        <h3>₹{{ number_format($summary['total_cost'], 0) }}</h3>
                         <p>Total Labor Cost</p>
                     </div>
                     <div class="icon"><i class="fas fa-dollar-sign"></i></div>
@@ -96,8 +96,8 @@
                                 <td>{{ ucfirst($data['employee']->role) }}</td>
                                 <td class="text-right">{{ $data['days_worked'] }}</td>
                                 <td class="text-right">{{ number_format($data['total_hours'], 2) }}</td>
-                                <td class="text-right">${{ number_format($data['average_rate'], 2) }}</td>
-                                <td class="text-right"><strong>${{ number_format($data['total_cost'], 2) }}</strong></td>
+                                <td class="text-right">₹{{ number_format($data['average_rate'], 2) }}</td>
+                                <td class="text-right"><strong>₹{{ number_format($data['total_cost'], 2) }}</strong></td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -106,7 +106,7 @@
                             <th colspan="3">Total</th>
                             <th class="text-right">{{ number_format($summary['total_hours'], 2) }}</th>
                             <th></th>
-                            <th class="text-right">${{ number_format($summary['total_cost'], 2) }}</th>
+                            <th class="text-right">₹{{ number_format($summary['total_cost'], 2) }}</th>
                         </tr>
                     </tfoot>
                 </table>

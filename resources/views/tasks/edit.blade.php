@@ -237,10 +237,10 @@
                                     <tr data-usage-id="{{ $usage->id }}">
                                         <td>
                                             {{ $usage->product->name ?? '-' }}
-                                            <br><small class="text-muted">${{ number_format($usage->unit_price ?? 0, 2) }}/{{ $usage->product->unit ?? 'unit' }}</small>
+                                            <br><small class="text-muted">₹{{ number_format($usage->unit_price ?? 0, 2) }}/{{ $usage->product->unit ?? 'unit' }}</small>
                                         </td>
                                         <td>{{ number_format($usage->quantity, 2) }}</td>
-                                        <td><strong>${{ number_format($usage->total_cost ?? 0, 2) }}</strong></td>
+                                        <td><strong>₹{{ number_format($usage->total_cost ?? 0, 2) }}</strong></td>
                                         <td>
                                             <button type="button" class="btn btn-xs btn-danger btn-delete-material"
                                                 data-usage-id="{{ $usage->id }}"
@@ -258,7 +258,7 @@
                             <tfoot>
                                 <tr class="bg-light">
                                     <th colspan="2" class="text-right">Total:</th>
-                                    <th id="totalMaterialCost">${{ number_format($task->material_cost ?? 0, 2) }}</th>
+                                    <th id="totalMaterialCost">₹{{ number_format($task->material_cost ?? 0, 2) }}</th>
                                     <th></th>
                                 </tr>
                             </tfoot>
@@ -279,15 +279,15 @@
                         <table class="table table-sm mb-0">
                             <tr>
                                 <td>Labor Cost</td>
-                                <td class="text-right">${{ number_format($task->labor_cost ?? 0, 2) }}</td>
+                                <td class="text-right">₹{{ number_format($task->labor_cost ?? 0, 2) }}</td>
                             </tr>
                             <tr>
                                 <td>Material Cost</td>
-                                <td class="text-right" id="summaryCost">${{ number_format($task->material_cost ?? 0, 2) }}</td>
+                                <td class="text-right" id="summaryCost">₹{{ number_format($task->material_cost ?? 0, 2) }}</td>
                             </tr>
                             <tr class="bg-light">
                                 <th>Actual Amount</th>
-                                <th class="text-right" id="summaryTotal">${{ number_format($task->actual_amount ?? 0, 2) }}</th>
+                                <th class="text-right" id="summaryTotal">₹{{ number_format($task->actual_amount ?? 0, 2) }}</th>
                             </tr>
                         </table>
                     </div>
@@ -348,7 +348,7 @@
                     </div>
 
                     <div class="form-group">
-                        <label>Calculated Total: <strong id="calculatedTotal">$0.00</strong></label>
+                        <label>Calculated Total: <strong id="calculatedTotal">₹0.00</strong></label>
                     </div>
 
                     <div class="form-group">
@@ -496,7 +496,7 @@ $(function() {
     function calculateTotal() {
         const qty = parseFloat($('#materialQty').val()) || 0;
         const price = parseFloat($('#unitPrice').val()) || 0;
-        $('#calculatedTotal').text('$' + (qty * price).toFixed(2));
+        $('#calculatedTotal').text('₹' + (qty * price).toFixed(2));
     }
     $('#materialQty, #unitPrice').on('input', calculateTotal);
 
@@ -522,7 +522,7 @@ $(function() {
                     addMaterialRow(response.data);
                     refreshTotalCost();
                     $('#addMaterialForm')[0].reset();
-                    $('#calculatedTotal').text('$0.00');
+                    $('#calculatedTotal').text('₹0.00');
                     $('#addMaterialModal').modal('hide');
                     showToast('success', response.message);
                 } else {
@@ -618,11 +618,11 @@ $(function() {
         $.get(`{{ url('tasks') }}/${taskId}/materials`, function(response) {
             if (response.success) {
                 const total = parseFloat(response.data.total_material_cost) || 0;
-                $('#totalMaterialCost').text('$' + total.toFixed(2));
-                $('#summaryCost').text('$' + total.toFixed(2));
+                $('#totalMaterialCost').text('₹' + total.toFixed(2));
+                $('#summaryCost').text('₹' + total.toFixed(2));
                 // Update actual amount (labor + material)
                 const labor = {{ $task->labor_cost ?? 0 }};
-                $('#summaryTotal').text('$' + (labor + total).toFixed(2));
+                $('#summaryTotal').text('₹' + (labor + total).toFixed(2));
             }
         });
     }

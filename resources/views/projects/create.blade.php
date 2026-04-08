@@ -21,11 +21,21 @@
                                 <div class="col-md-4">
                                     <div class="form-group">
                                         <label for="code">Project Code <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control @error('code') is-invalid @enderror"
-                                            id="code" name="code" value="{{ old('code') }}" required>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control @error('code') is-invalid @enderror"
+                                                id="code" name="code"
+                                                value="{{ old('code', $nextCode) }}"
+                                                placeholder="{{ $nextCode }}" required>
+                                            <div class="input-group-append">
+                                                <button type="button" class="btn btn-outline-secondary" id="refreshCode" title="Generate new code">
+                                                    <i class="fas fa-sync-alt"></i>
+                                                </button>
+                                            </div>
+                                        </div>
                                         @error('code')
-                                            <span class="invalid-feedback">{{ $message }}</span>
+                                            <span class="invalid-feedback d-block">{{ $message }}</span>
                                         @enderror
+                                        <small class="form-text text-muted">Auto-generated. You can edit it if needed.</small>
                                     </div>
                                 </div>
                                 <div class="col-md-8">
@@ -69,7 +79,7 @@
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        <label for="quoted_amount">Quoted Amount ($) <span class="text-danger">*</span></label>
+                                        <label for="quoted_amount">Quoted Amount (₹) <span class="text-danger">*</span></label>
                                         <input type="number" step="0.01" min="0"
                                             class="form-control @error('quoted_amount') is-invalid @enderror"
                                             id="quoted_amount" name="quoted_amount" value="{{ old('quoted_amount', '0.00') }}" required>
@@ -129,3 +139,26 @@
     </div>
 </section>
 @endsection
+
+@push('scripts')
+<script>
+document.getElementById('refreshCode').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    btn.querySelector('i').classList.add('fa-spin');
+
+    fetch('{{ route('projects.generate-code') }}')
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+            document.getElementById('code').value = data.code;
+        })
+        .catch(function () {
+            alert('Could not generate code. Please try again.');
+        })
+        .finally(function () {
+            btn.disabled = false;
+            btn.querySelector('i').classList.remove('fa-spin');
+        });
+});
+</script>
+@endpush

@@ -12,42 +12,49 @@ class EmployeeController extends Controller
     {
         $user = $request->user();
 
-        $query = Employee::with(['site', 'todayAttendance', 'designation']);
+        $query = Employee::with(['site', 'todayAttendance.breaks', 'designation.category']);
 
         // Allow fetching all employees (bypass site restriction) when all=true
         $fetchAll = $request->boolean('all', false);
 
         // Supervisors only see employees at their site (unless all=true for search)
         if (!$fetchAll && $user->isSupervisor() && $user->site_id) {
-            $query->where('site_id', $user->site_id);
+            $query->where('employees.site_id', $user->site_id);
         }
 
         // Filter by site
         if ($request->has('site_id')) {
-            $query->where('site_id', $request->site_id);
+            $query->where('employees.site_id', $request->site_id);
         }
 
         // Filter by status
         if ($request->has('status')) {
-            $query->where('status', $request->status);
+            $query->where('employees.status', $request->status);
         }
 
         // Filter by designation
         if ($request->has('designation_id')) {
-            $query->where('designation_id', $request->designation_id);
+            $query->where('employees.designation_id', $request->designation_id);
         }
 
         // Search
         if ($request->has('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('employee_code', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%");
+                $q->where('employees.name', 'like', "%{$search}%")
+                  ->orWhere('employees.employee_code', 'like', "%{$search}%")
+                  ->orWhere('employees.phone', 'like', "%{$search}%");
             });
         }
 
-        $employees = $query->orderBy('name')->get();
+        // Join with designations and designation_categories for ordering
+        $query->join('designations', 'employees.designation_id', '=', 'designations.id')
+              ->leftJoin('designation_categories', 'designations.category_id', '=', 'designation_categories.id')
+              ->select('employees.*')
+              ->orderBy('designation_categories.name', 'asc')
+              ->orderBy('employees.daily_rate', 'desc');
+
+        $employees = $query->get();
 
         return response()->json([
             'success' => true,
@@ -57,7 +64,7 @@ class EmployeeController extends Controller
 
     public function show(Employee $employee)
     {
-        $employee->load(['site', 'todayAttendance', 'designation', 'taskAssignments' => function ($query) {
+        $employee->load(['site', 'todayAttendance.breaks', 'designation', 'taskAssignments' => function ($query) {
             $query->whereNull('removed_at')->with('task');
         }]);
 

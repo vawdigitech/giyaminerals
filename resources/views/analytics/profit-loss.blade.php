@@ -12,7 +12,7 @@
             <div class="col-lg-3 col-6">
                 <div class="small-box bg-info">
                     <div class="inner">
-                        <h3>${{ number_format($summary['total_quoted'], 0) }}</h3>
+                        <h3>₹{{ number_format($summary['total_quoted'], 0) }}</h3>
                         <p>Total Quoted</p>
                     </div>
                     <div class="icon"><i class="fas fa-file-invoice-dollar"></i></div>
@@ -21,7 +21,7 @@
             <div class="col-lg-3 col-6">
                 <div class="small-box bg-warning">
                     <div class="inner">
-                        <h3>${{ number_format($summary['total_actual'], 0) }}</h3>
+                        <h3>₹{{ number_format($summary['total_actual'], 0) }}</h3>
                         <p>Total Actual Cost</p>
                     </div>
                     <div class="icon"><i class="fas fa-receipt"></i></div>
@@ -30,7 +30,7 @@
             <div class="col-lg-3 col-6">
                 <div class="small-box bg-{{ $summary['total_profit_loss'] >= 0 ? 'success' : 'danger' }}">
                     <div class="inner">
-                        <h3>${{ number_format(abs($summary['total_profit_loss']), 0) }}</h3>
+                        <h3>₹{{ number_format(abs($summary['total_profit_loss']), 0) }}</h3>
                         <p>Total {{ $summary['total_profit_loss'] >= 0 ? 'Profit' : 'Loss' }}</p>
                     </div>
                     <div class="icon"><i class="fas fa-{{ $summary['total_profit_loss'] >= 0 ? 'trending-up' : 'trending-down' }}"></i></div>
@@ -111,12 +111,12 @@
                                     </a>
                                 </td>
                                 <td>{{ $data['project']->site->name ?? '-' }}</td>
-                                <td class="text-right">${{ number_format($data['quoted_amount'], 2) }}</td>
-                                <td class="text-right">${{ number_format($data['labor_cost'], 2) }}</td>
-                                <td class="text-right">${{ number_format($data['material_cost'], 2) }}</td>
-                                <td class="text-right">${{ number_format($data['actual_amount'], 2) }}</td>
+                                <td class="text-right">₹{{ number_format($data['quoted_amount'], 2) }}</td>
+                                <td class="text-right">₹{{ number_format($data['labor_cost'], 2) }}</td>
+                                <td class="text-right">₹{{ number_format($data['material_cost'], 2) }}</td>
+                                <td class="text-right">₹{{ number_format($data['actual_amount'], 2) }}</td>
                                 <td class="text-right {{ $data['is_profitable'] ? 'text-success' : 'text-danger' }}">
-                                    <strong>{{ $data['is_profitable'] ? '+' : '-' }}${{ number_format(abs($data['profit_loss']), 2) }}</strong>
+                                    <strong>{{ $data['is_profitable'] ? '+' : '-' }}₹{{ number_format(abs($data['profit_loss']), 2) }}</strong>
                                 </td>
                                 <td class="text-right {{ $data['profit_margin'] >= 0 ? 'text-success' : 'text-danger' }}">
                                     {{ $data['profit_margin'] }}%
@@ -127,12 +127,12 @@
                     <tfoot class="bg-light">
                         <tr>
                             <th colspan="2">Total</th>
-                            <th class="text-right">${{ number_format($summary['total_quoted'], 2) }}</th>
-                            <th class="text-right">${{ number_format($summary['total_labor'], 2) }}</th>
-                            <th class="text-right">${{ number_format($summary['total_material'], 2) }}</th>
-                            <th class="text-right">${{ number_format($summary['total_actual'], 2) }}</th>
+                            <th class="text-right">₹{{ number_format($summary['total_quoted'], 2) }}</th>
+                            <th class="text-right">₹{{ number_format($summary['total_labor'], 2) }}</th>
+                            <th class="text-right">₹{{ number_format($summary['total_material'], 2) }}</th>
+                            <th class="text-right">₹{{ number_format($summary['total_actual'], 2) }}</th>
                             <th class="text-right {{ $summary['total_profit_loss'] >= 0 ? 'text-success' : 'text-danger' }}">
-                                <strong>{{ $summary['total_profit_loss'] >= 0 ? '+' : '-' }}${{ number_format(abs($summary['total_profit_loss']), 2) }}</strong>
+                                <strong>{{ $summary['total_profit_loss'] >= 0 ? '+' : '-' }}₹{{ number_format(abs($summary['total_profit_loss']), 2) }}</strong>
                             </th>
                             <th></th>
                         </tr>

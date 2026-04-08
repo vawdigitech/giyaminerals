@@ -233,6 +233,47 @@
                                         <td>{{ $attendance->notes }}</td>
                                     </tr>
                                     @endif
+                                    @php
+                                        $completedBreaks = $attendance->breaks->filter(fn($b) => !is_null($b->break_in_time));
+                                        $totalBreakMins = $completedBreaks->sum(fn($b) =>
+                                            abs(\Carbon\Carbon::parse($b->break_out_time)->diffInMinutes(\Carbon\Carbon::parse($b->break_in_time)))
+                                        );
+                                    @endphp
+                                    @if($attendance->breaks->count() > 0)
+                                    <tr>
+                                        <th>Break Duration:</th>
+                                        <td>
+                                            @if($totalBreakMins > 0)
+                                                @if(floor($totalBreakMins / 60) > 0)
+                                                    {{ floor($totalBreakMins / 60) }}h {{ $totalBreakMins % 60 }}m
+                                                @else
+                                                    {{ $totalBreakMins }}m
+                                                @endif
+                                            @else
+                                                -
+                                            @endif
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Break Details:</th>
+                                        <td>
+                                            @foreach($attendance->breaks as $break)
+                                                <div class="small {{ !$loop->last ? 'mb-1' : '' }}">
+                                                    <span class="text-muted">Break {{ $loop->iteration }}:</span>
+                                                    {{ \Carbon\Carbon::parse($break->break_out_time)->format('h:i A') }}
+                                                    @if($break->break_in_time)
+                                                        &rarr; {{ \Carbon\Carbon::parse($break->break_in_time)->format('h:i A') }}
+                                                        <span class="badge badge-secondary">
+                                                            {{ abs(\Carbon\Carbon::parse($break->break_out_time)->diffInMinutes(\Carbon\Carbon::parse($break->break_in_time))) }}m
+                                                        </span>
+                                                    @else
+                                                        <span class="badge badge-warning">On break</span>
+                                                    @endif
+                                                </div>
+                                            @endforeach
+                                        </td>
+                                    </tr>
+                                    @endif
                                 </table>
                             </div>
                             <div class="col-md-6">

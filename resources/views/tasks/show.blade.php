@@ -92,38 +92,79 @@
                 <!-- Costs Card -->
                 <div class="card card-success">
                     <div class="card-header">
-                        <h3 class="card-title">Costs @if($task->hasSubtasks())@endif</h3>
+                        <h3 class="card-title">Costs @if($task->hasSubtasks()) <small class="text-white">(Aggregated)</small>@endif</h3>
                     </div>
                     <div class="card-body">
                         <ul class="list-group list-group-unbordered">
                             <li class="list-group-item">
-                                <b>Quoted Amount</b> <span class="float-right">${{ number_format($task->quoted_amount ?? 0, 2) }}</span>
+                                <b>Quoted Amount</b> <span class="float-right">₹{{ number_format($task->hasSubtasks() ? ($task->aggregated_quoted_amount ?? 0) : ($task->quoted_amount ?? 0), 2) }}</span>
                             </li>
                             @if($task->hasSubtasks())
                                 <li class="list-group-item">
-                                    <b>Labor Cost</b> <span class="float-right">${{ number_format($task->aggregated_labor_cost ?? 0, 2) }}</span>
+                                    <b>Labor Cost</b> <span class="float-right">₹{{ number_format($task->aggregated_labor_cost ?? 0, 2) }}</span>
                                 </li>
                                 <li class="list-group-item">
-                                    <b>Material Cost</b> <span class="float-right">${{ number_format($task->aggregated_material_cost ?? 0, 2) }}</span>
+                                    <b>Material Cost</b> <span class="float-right">₹{{ number_format($task->aggregated_material_cost ?? 0, 2) }}</span>
                                 </li>
                                 <li class="list-group-item">
-                                    <b>Actual Amount</b> <span class="float-right text-primary"><strong>${{ number_format($task->aggregated_actual_amount ?? 0, 2) }}</strong></span>
+                                    <b>Actual Amount</b> <span class="float-right text-primary"><strong>₹{{ number_format($task->aggregated_actual_amount ?? 0, 2) }}</strong></span>
                                 </li>
                                 <li class="list-group-item">
                                     <b>Total Hours</b> <span class="float-right">{{ number_format($task->total_hours_worked ?? 0, 1) }} hrs</span>
                                 </li>
                             @else
                                 <li class="list-group-item">
-                                    <b>Labor Cost</b> <span class="float-right">${{ number_format($task->labor_cost ?? 0, 2) }}</span>
+                                    <b>Labor Cost</b> <span class="float-right">₹{{ number_format($task->labor_cost ?? 0, 2) }}</span>
                                 </li>
                                 <li class="list-group-item">
-                                    <b>Material Cost</b> <span class="float-right">${{ number_format($task->material_cost ?? 0, 2) }}</span>
+                                    <b>Material Cost</b> <span class="float-right">₹{{ number_format($task->material_cost ?? 0, 2) }}</span>
                                 </li>
                                 <li class="list-group-item">
-                                    <b>Actual Amount</b> <span class="float-right text-primary"><strong>${{ number_format($task->actual_amount ?? 0, 2) }}</strong></span>
+                                    <b>Actual Amount</b> <span class="float-right text-primary"><strong>₹{{ number_format($task->actual_amount ?? 0, 2) }}</strong></span>
                                 </li>
                             @endif
                         </ul>
+                    </div>
+                </div>
+
+                <!-- Estimate vs Actual Card -->
+                @php
+                    $taskEstimated = $task->hasSubtasks() ? ($task->aggregated_quoted_amount ?? 0) : ($task->quoted_amount ?? 0);
+                    $taskActual    = $task->hasSubtasks()
+                        ? ($task->aggregated_actual_amount ?? 0)
+                        : ($task->actual_amount ?? 0);
+                    $taskDiff      = $taskEstimated - $taskActual;
+                    $taskIsProfit  = $taskDiff >= 0;
+                    $taskMargin    = $taskEstimated > 0 ? round(abs($taskDiff) / $taskEstimated * 100, 1) : 0;
+                    $taskBurnPct   = $taskEstimated > 0 ? min(round($taskActual / $taskEstimated * 100), 100) : 0;
+                @endphp
+                <div class="card card-{{ $taskIsProfit ? 'success' : 'danger' }} card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-balance-scale mr-1"></i> Estimate Analysis</h3>
+                    </div>
+                    <div class="card-body p-2">
+                        <table class="table table-sm table-borderless mb-1">
+                            <tr>
+                                <td class="text-muted">Estimated</td>
+                                <td class="text-right font-weight-bold">₹{{ number_format($taskEstimated, 2) }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-muted">Actual Cost</td>
+                                <td class="text-right font-weight-bold">₹{{ number_format($taskActual, 2) }}</td>
+                            </tr>
+                            <tr class="border-top">
+                                <td class="font-weight-bold">{{ $taskIsProfit ? 'Profit' : 'Loss' }}</td>
+                                <td class="text-right font-weight-bold text-{{ $taskIsProfit ? 'success' : 'danger' }}">
+                                    {{ $taskIsProfit ? '+' : '-' }}₹{{ number_format(abs($taskDiff), 2) }}
+                                    <small>({{ $taskMargin }}%)</small>
+                                </td>
+                            </tr>
+                        </table>
+                        <div class="progress" style="height:10px;" title="Cost burn: {{ $taskBurnPct }}% of estimate used">
+                            <div class="progress-bar bg-{{ $taskBurnPct >= 100 ? 'danger' : ($taskBurnPct >= 80 ? 'warning' : 'success') }}"
+                                 style="width:{{ $taskBurnPct }}%"></div>
+                        </div>
+                        <small class="text-muted">{{ $taskBurnPct }}% of estimate used</small>
                     </div>
                 </div>
             </div>
@@ -176,18 +217,18 @@
                                             </div>
                                             <small>{{ $subtask->progress ?? 0 }}%</small>
                                         </td>
-                                        <td>${{ number_format($subtask->labor_cost ?? 0, 2) }}</td>
-                                        <td>${{ number_format($subtask->material_cost ?? 0, 2) }}</td>
-                                        <td><strong>${{ number_format($subtask->actual_amount ?? 0, 2) }}</strong></td>
+                                        <td>₹{{ number_format($subtask->labor_cost ?? 0, 2) }}</td>
+                                        <td>₹{{ number_format($subtask->material_cost ?? 0, 2) }}</td>
+                                        <td><strong>₹{{ number_format($subtask->actual_amount ?? 0, 2) }}</strong></td>
                                     </tr>
                                 @endforeach
                             </tbody>
                             <tfoot class="bg-light">
                                 <tr>
                                     <th colspan="4" class="text-right">Totals:</th>
-                                    <th>${{ number_format($task->subtasks->sum('labor_cost'), 2) }}</th>
-                                    <th>${{ number_format($task->subtasks->sum('material_cost'), 2) }}</th>
-                                    <th>${{ number_format($task->subtasks->sum('actual_amount'), 2) }}</th>
+                                    <th>₹{{ number_format($task->subtasks->sum('labor_cost'), 2) }}</th>
+                                    <th>₹{{ number_format($task->subtasks->sum('material_cost'), 2) }}</th>
+                                    <th>₹{{ number_format($task->subtasks->sum('actual_amount'), 2) }}</th>
                                 </tr>
                             </tfoot>
                         </table>
@@ -248,8 +289,8 @@
                                             <small>{{ implode(', ', array_unique($summary['tasks'])) }}</small>
                                         </td>
                                         <td>{{ number_format($summary['hours'], 1) }} hrs</td>
-                                        <td>${{ number_format($summary['rate'], 2) }}/hr</td>
-                                        <td><strong>${{ number_format($summary['cost'], 2) }}</strong></td>
+                                        <td>₹{{ number_format($summary['rate'], 2) }}/hr</td>
+                                        <td><strong>₹{{ number_format($summary['cost'], 2) }}</strong></td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -258,7 +299,7 @@
                                     <th colspan="2" class="text-right">Totals ({{ $employeeWorkSummary->count() }} employees):</th>
                                     <th>{{ number_format($employeeWorkSummary->sum('hours'), 1) }} hrs</th>
                                     <th></th>
-                                    <th>${{ number_format($employeeWorkSummary->sum('cost'), 2) }}</th>
+                                    <th>₹{{ number_format($employeeWorkSummary->sum('cost'), 2) }}</th>
                                 </tr>
                             </tfoot>
                         </table>
@@ -304,8 +345,8 @@
                                         </td>
                                         <td>{{ $assignment->assigned_at ? \Carbon\Carbon::parse($assignment->assigned_at)->format('M d, Y') : '-' }}</td>
                                         <td>{{ number_format($assignment->hours_worked ?? 0, 1) }}</td>
-                                        <td>${{ number_format($assignment->hourly_rate_at_time ?? 0, 2) }}/hr</td>
-                                        <td><strong>${{ number_format($assignmentAmount, 2) }}</strong></td>
+                                        <td>₹{{ number_format($assignment->hourly_rate_at_time ?? 0, 2) }}/hr</td>
+                                        <td><strong>₹{{ number_format($assignmentAmount, 2) }}</strong></td>
                                         <td>
                                             @if($assignment->removed_at)
                                                 <span class="badge badge-secondary">Removed</span>
@@ -326,7 +367,7 @@
                                     <th colspan="2" class="text-right">Totals:</th>
                                     <th>{{ number_format($totalAssignmentHours, 1) }} hrs</th>
                                     <th></th>
-                                    <th><strong>${{ number_format($totalAssignmentCost, 2) }}</strong></th>
+                                    <th><strong>₹{{ number_format($totalAssignmentCost, 2) }}</strong></th>
                                     <th></th>
                                 </tr>
                             </tfoot>
@@ -448,8 +489,8 @@
                                             <small class="text-muted">({{ $usage->product->unit ?? '' }})</small>
                                         </td>
                                         <td>{{ number_format($usage->quantity, 2) }}</td>
-                                        <td>${{ number_format($usage->unit_price ?? 0, 2) }}</td>
-                                        <td><strong>${{ number_format($usage->total_cost ?? 0, 2) }}</strong></td>
+                                        <td>₹{{ number_format($usage->unit_price ?? 0, 2) }}</td>
+                                        <td><strong>₹{{ number_format($usage->total_cost ?? 0, 2) }}</strong></td>
                                         <td>{{ Str::limit($usage->notes, 30) ?? '-' }}</td>
                                         <td>{{ $usage->used_at ? $usage->used_at->format('M d, Y') : '-' }}</td>
                                         <td>
@@ -480,7 +521,7 @@
                             <tfoot>
                                 <tr class="bg-light">
                                     <th colspan="3" class="text-right">Total Material Cost:</th>
-                                    <th id="totalMaterialCost">${{ number_format($task->material_cost ?? 0, 2) }}</th>
+                                    <th id="totalMaterialCost">₹{{ number_format($task->material_cost ?? 0, 2) }}</th>
                                     <th colspan="3"></th>
                                 </tr>
                             </tfoot>
@@ -942,12 +983,12 @@
                 success: function(response) {
                     if (response.success) {
                         const total = parseFloat(response.data.total_material_cost) || 0;
-                        $('#totalMaterialCost').text('$' + total.toFixed(2));
+                        $('#totalMaterialCost').text('₹' + total.toFixed(2));
 
                         // Also update the cost card in sidebar
                         $('.card-success .list-group-item b:contains("Material Cost")')
                             .siblings('span')
-                            .text('$' + total.toFixed(2));
+                            .text('₹' + total.toFixed(2));
                     }
                 }
             });

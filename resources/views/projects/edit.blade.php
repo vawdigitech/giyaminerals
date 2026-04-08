@@ -71,7 +71,7 @@
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        <label for="quoted_amount">Quoted Amount ($) <span class="text-danger">*</span></label>
+                                        <label for="quoted_amount">Quoted Amount (₹) <span class="text-danger">*</span></label>
                                         <input type="number" step="0.01" min="0"
                                             class="form-control @error('quoted_amount') is-invalid @enderror"
                                             id="quoted_amount" name="quoted_amount"

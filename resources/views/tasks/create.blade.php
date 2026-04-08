@@ -17,30 +17,7 @@
                     <form method="POST" action="{{ route('tasks.store') }}">
                         @csrf
                         <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="form-group">
-                                        <label for="code">Task Code <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control @error('code') is-invalid @enderror"
-                                            id="code" name="code" value="{{ old('code') }}"
-                                            placeholder="e.g., 1.1" required>
-                                        @error('code')
-                                            <span class="invalid-feedback">{{ $message }}</span>
-                                        @enderror
-                                    </div>
-                                </div>
-                                <div class="col-md-8">
-                                    <div class="form-group">
-                                        <label for="name">Task Name <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control @error('name') is-invalid @enderror"
-                                            id="name" name="name" value="{{ old('name') }}" required>
-                                        @error('name')
-                                            <span class="invalid-feedback">{{ $message }}</span>
-                                        @enderror
-                                    </div>
-                                </div>
-                            </div>
-
+                            {{-- Step 1: Project --}}
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
@@ -60,12 +37,13 @@
                                         @enderror
                                     </div>
                                 </div>
+                                {{-- Step 2: Parent Task (only relevant after project selected) --}}
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        <label for="parent_id">Parent Task (Optional)</label>
+                                        <label for="parent_id">Parent Task <small class="text-muted">(leave blank for a master task)</small></label>
                                         <select class="form-control @error('parent_id') is-invalid @enderror"
                                             id="parent_id" name="parent_id">
-                                            <option value="">-- No Parent (Top-level Task) --</option>
+                                            <option value="">-- No Parent (Master Task) --</option>
                                             @foreach($parentTasks as $task)
                                                 <option value="{{ $task->id }}" {{ old('parent_id') == $task->id ? 'selected' : '' }}>
                                                     {{ $task->code }} - {{ $task->name }}
@@ -73,6 +51,42 @@
                                             @endforeach
                                         </select>
                                         @error('parent_id')
+                                            <span class="invalid-feedback">{{ $message }}</span>
+                                        @enderror
+                                    </div>
+                                </div>
+                            </div>
+
+                            {{-- Step 3: Task Code (auto-generated) + Task Name --}}
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-group">
+                                        <label for="code">
+                                            Task Code <span class="text-danger">*</span>
+                                            <small class="text-muted" id="code-hint"></small>
+                                        </label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control @error('code') is-invalid @enderror"
+                                                id="code" name="code" value="{{ old('code') }}"
+                                                placeholder="Select a project first" required>
+                                            <div class="input-group-append">
+                                                <button type="button" class="btn btn-outline-secondary" id="refresh-code"
+                                                    title="Re-generate code" style="display:none;">
+                                                    <i class="fas fa-sync-alt"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        @error('code')
+                                            <span class="invalid-feedback d-block">{{ $message }}</span>
+                                        @enderror
+                                    </div>
+                                </div>
+                                <div class="col-md-8">
+                                    <div class="form-group">
+                                        <label for="name">Task Name <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control @error('name') is-invalid @enderror"
+                                            id="name" name="name" value="{{ old('name') }}" required>
+                                        @error('name')
                                             <span class="invalid-feedback">{{ $message }}</span>
                                         @enderror
                                     </div>
@@ -195,34 +209,81 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const projectSelect = document.getElementById('project_id');
-    const parentSelect = document.getElementById('parent_id');
+    const projectSelect  = document.getElementById('project_id');
+    const parentSelect   = document.getElementById('parent_id');
+    const codeInput      = document.getElementById('code');
+    const codeHint       = document.getElementById('code-hint');
+    const refreshBtn     = document.getElementById('refresh-code');
 
-    projectSelect.addEventListener('change', function() {
-        const projectId = this.value;
-
-        // Clear parent tasks
-        parentSelect.innerHTML = '<option value="">-- No Parent (Top-level Task) --</option>';
+    function suggestCode() {
+        const projectId = projectSelect.value;
+        const parentId  = parentSelect.value;
 
         if (!projectId) return;
 
-        // Fetch tasks for selected project
+        let url = `{{ route('tasks.suggest-code') }}?project_id=${projectId}`;
+        if (parentId) url += `&parent_id=${parentId}`;
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                codeInput.value = data.code;
+                codeHint.textContent = parentId ? '(sub-task, auto)' : '(master task, auto)';
+                refreshBtn.style.display = 'inline-block';
+            })
+            .catch(err => console.error('Error suggesting code:', err));
+    }
+
+    function loadParentTasks(projectId, callback) {
+        parentSelect.innerHTML = '<option value="">-- No Parent (Master Task) --</option>';
+        if (!projectId) {
+            codeInput.value = '';
+            codeInput.placeholder = 'Select a project first';
+            codeHint.textContent = '';
+            refreshBtn.style.display = 'none';
+            return;
+        }
+
         fetch(`{{ url('tasks-by-project') }}/${projectId}`)
-            .then(response => response.json())
+            .then(r => r.json())
             .then(tasks => {
                 tasks.forEach(task => {
-                    const option = document.createElement('option');
-                    option.value = task.id;
-                    option.textContent = `${task.code} - ${task.name}`;
-                    parentSelect.appendChild(option);
+                    const opt = document.createElement('option');
+                    opt.value = task.id;
+                    opt.textContent = `${task.code} - ${task.name}`;
+                    parentSelect.appendChild(opt);
                 });
+                if (callback) callback();
             })
-            .catch(error => console.error('Error fetching tasks:', error));
+            .catch(err => console.error('Error fetching parent tasks:', err));
+    }
+
+    projectSelect.addEventListener('change', function() {
+        loadParentTasks(this.value, () => suggestCode());
     });
 
-    // Trigger change if project is already selected (e.g., on page load with old value)
+    parentSelect.addEventListener('change', function() {
+        if (projectSelect.value) suggestCode();
+    });
+
+    refreshBtn.addEventListener('click', function() {
+        suggestCode();
+    });
+
+    // On page load: restore state if old() values are present
     if (projectSelect.value) {
-        projectSelect.dispatchEvent(new Event('change'));
+        const oldParent = "{{ old('parent_id') }}";
+        loadParentTasks(projectSelect.value, () => {
+            if (oldParent) {
+                parentSelect.value = oldParent;
+            }
+            // Only auto-fill code if no old code value exists
+            if (!codeInput.value) {
+                suggestCode();
+            } else {
+                refreshBtn.style.display = 'inline-block';
+            }
+        });
     }
 });
 </script>

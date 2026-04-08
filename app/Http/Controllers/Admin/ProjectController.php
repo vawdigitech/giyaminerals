@@ -50,7 +50,27 @@ class ProjectController extends Controller
     public function create()
     {
         $sites = Site::orderBy('name')->get();
-        return view('projects.create', compact('sites'));
+        $nextCode = $this->generateNextCode();
+        return view('projects.create', compact('sites', 'nextCode'));
+    }
+
+    public function generateCode()
+    {
+        return response()->json(['code' => $this->generateNextCode()]);
+    }
+
+    private function generateNextCode(): string
+    {
+        $year = date('Y');
+        $prefix = "PRJ-{$year}-";
+
+        $last = Project::where('code', 'like', "{$prefix}%")
+            ->orderByRaw('CAST(SUBSTRING(code, ' . (strlen($prefix) + 1) . ') AS UNSIGNED) DESC')
+            ->value('code');
+
+        $next = $last ? ((int) substr($last, strlen($prefix))) + 1 : 1;
+
+        return $prefix . str_pad($next, 4, '0', STR_PAD_LEFT);
     }
 
     public function store(Request $request)
@@ -78,17 +98,31 @@ class ProjectController extends Controller
             $q->whereNull('parent_id')->with('subtasks');
         }]);
 
+        $allTasks = $project->tasks();
+
         // Calculate statistics
-        $totalTasks = $project->tasks()->count();
-        $completedTasks = $project->tasks()->where('status', 'completed')->count();
-        $laborCost = $project->tasks()->sum('labor_cost');
+        $totalTasks     = $allTasks->count();
+        $completedTasks = $allTasks->where('status', 'completed')->count();
+        $inProgressTasks = $allTasks->where('status', 'in_progress')->count();
+        $pendingTasks   = $allTasks->where('status', 'pending')->count();
+        $onHoldTasks    = $allTasks->where('status', 'on_hold')->count();
+
+        $laborCost    = $project->tasks()->sum('labor_cost');
         $materialCost = $project->tasks()->sum('material_cost');
         $actualAmount = $laborCost + $materialCost;
-        $profitLoss = $project->quoted_amount - $actualAmount;
+        $quotedTasks  = $project->tasks()->sum('quoted_amount');
+        $profitLoss   = $project->quoted_amount - $actualAmount;
+        $margin       = $project->quoted_amount > 0
+            ? round(($profitLoss / $project->quoted_amount) * 100, 1)
+            : 0;
+        $burnPct = $project->quoted_amount > 0
+            ? min(round(($actualAmount / $project->quoted_amount) * 100), 100)
+            : 0;
 
         return view('projects.show', compact(
-            'project', 'totalTasks', 'completedTasks',
-            'laborCost', 'materialCost', 'actualAmount', 'profitLoss'
+            'project', 'totalTasks', 'completedTasks', 'inProgressTasks',
+            'pendingTasks', 'onHoldTasks', 'laborCost', 'materialCost',
+            'actualAmount', 'quotedTasks', 'profitLoss', 'margin', 'burnPct'
         ));
     }
 

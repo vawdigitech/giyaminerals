@@ -25,6 +25,11 @@ class SiteController extends Controller
         return redirect()->route('sites.index')->with('success', 'Site added');
     }
 
+    public function show(Site $site)
+    {
+        return view('sites.show', compact('site'));
+    }
+
     public function edit(Site $site)
     {
         return view('sites.edit', compact('site'));

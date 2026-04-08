@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Designation;
+use App\Models\DesignationCategory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -11,7 +12,7 @@ class DesignationController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Designation::withCount('employees');
+        $query = Designation::withCount('employees')->with('category');
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -25,23 +26,40 @@ class DesignationController extends Controller
             $query->where('is_active', $request->status === 'active');
         }
 
-        $designations = $query->orderBy('name')->paginate(15);
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->category_id);
+        }
 
-        return view('designations.index', compact('designations'));
+        $designations = $query->orderBy('name')->paginate(15)->withQueryString();
+        $filterCategories = DesignationCategory::active()->orderBy('name')->get();
+
+        return view('designations.index', compact('designations', 'filterCategories'));
+    }
+
+    public function byCategory($id)
+    {
+        $designations = Designation::active()
+            ->where('category_id', $id)
+            ->orderBy('name')
+            ->get(['id', 'name', 'code']);
+
+        return response()->json($designations);
     }
 
     public function create()
     {
-        return view('designations.create');
+        $categories = DesignationCategory::active()->orderBy('name')->get();
+        return view('designations.create', compact('categories'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:100',
-            'code' => 'required|string|max:50|unique:designations',
+            'name'        => 'required|string|max:100',
+            'code'        => 'required|string|max:50|unique:designations',
             'description' => 'nullable|string|max:500',
-            'is_active' => 'boolean',
+            'is_active'   => 'boolean',
+            'category_id' => 'nullable|exists:designation_categories,id',
         ]);
 
         $validated['code'] = Str::upper($validated['code']);
@@ -55,16 +73,18 @@ class DesignationController extends Controller
 
     public function edit(Designation $designation)
     {
-        return view('designations.edit', compact('designation'));
+        $categories = DesignationCategory::active()->orderBy('name')->get();
+        return view('designations.edit', compact('designation', 'categories'));
     }
 
     public function update(Request $request, Designation $designation)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:100',
-            'code' => 'required|string|max:50|unique:designations,code,' . $designation->id,
+            'name'        => 'required|string|max:100',
+            'code'        => 'required|string|max:50|unique:designations,code,' . $designation->id,
             'description' => 'nullable|string|max:500',
-            'is_active' => 'boolean',
+            'is_active'   => 'boolean',
+            'category_id' => 'nullable|exists:designation_categories,id',
         ]);
 
         $validated['code'] = Str::upper($validated['code']);

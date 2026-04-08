@@ -7,6 +7,34 @@
 @section('content')
 <section class="content">
     <div class="container-fluid">
+        @if(session('success'))
+            <div class="alert alert-success alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                {{ session('success') }}
+            </div>
+        @endif
+
+        @if(session('import_errors') && count(session('import_errors')))
+            <div class="alert alert-warning alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                <strong>Some rows were skipped:</strong>
+                <ul class="mb-0 mt-1">
+                    @foreach(session('import_errors') as $err)
+                        <li>{{ $err }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
+        @if($errors->any())
+            <div class="alert alert-danger alert-dismissible fade show">
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+                @foreach($errors->all() as $error)
+                    <p class="mb-0">{{ $error }}</p>
+                @endforeach
+            </div>
+        @endif
+
         <!-- Summary Cards -->
         <div class="row">
             <div class="col-lg-2 col-6">
@@ -99,6 +127,11 @@
                         <a href="{{ route('attendance.export', request()->all()) }}" class="btn btn-success">
                             <i class="fas fa-download"></i> Export
                         </a>
+                        @can('attendance.export')
+                        <button type="button" class="btn btn-warning" data-toggle="modal" data-target="#importModal">
+                            <i class="fas fa-file-upload"></i> Import
+                        </button>
+                        @endcan
                     </div>
                 </form>
             </div>
@@ -106,6 +139,11 @@
 
         <!-- Quick Links -->
         <div class="mb-3">
+            @can('attendance.create')
+            <a href="{{ route('attendance.create') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Create Attendance
+            </a>
+            @endcan
             <a href="{{ route('attendance.daily') }}" class="btn btn-outline-primary">
                 <i class="fas fa-calendar-day"></i> Today's Attendance
             </a>
@@ -186,8 +224,22 @@
                                 <td>{{ $attendance->markedBy->name ?? '-' }}</td>
                                 <td class="text-center">
                                     <button type="button" class="btn btn-sm btn-info" data-toggle="modal" data-target="#detailsModal{{ $attendance->id }}">
-                                        <i class="fas fa-eye"></i> View
+                                        <i class="fas fa-eye"></i>
                                     </button>
+                                    @can('attendance.edit')
+                                    <a href="{{ route('attendance.edit', $attendance) }}" class="btn btn-sm btn-warning">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    @endcan
+                                    @can('attendance.delete')
+                                    <form action="{{ route('attendance.destroy', $attendance) }}" method="POST" style="display: inline-block;" onsubmit="return confirm('Are you sure you want to delete this attendance record?');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-sm btn-danger">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                    @endcan
                                 </td>
                             </tr>
                         @empty
@@ -200,6 +252,62 @@
                 <div class="mt-3">
                     {{ $attendances->withQueryString()->links() }}
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div class="modal fade" id="importModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-md" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-file-upload mr-2"></i>Import Attendance from Excel</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <form action="{{ route('attendance.import') }}" method="POST" enctype="multipart/form-data">
+                    @csrf
+                    <div class="modal-body">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Upload an Excel (.xlsx, .xls) or CSV file to import old attendance records.
+                            <br>
+                            Required columns: <strong>Date, Employee Code, Site Name, Status</strong>
+                            <br>
+                            Optional columns: <strong>Check In, Check Out, Notes</strong>
+                            <br><br>
+                            <a href="{{ route('attendance.template') }}" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-download mr-1"></i> Download Sample Template
+                            </a>
+                        </div>
+                        <div class="form-group">
+                            <label for="importFile">Select File <span class="text-danger">*</span></label>
+                            <div class="custom-file">
+                                <input type="file" class="custom-file-input" id="importFile" name="file"
+                                    accept=".xlsx,.xls,.csv" required>
+                                <label class="custom-file-label" for="importFile">Choose file...</label>
+                            </div>
+                            <small class="text-muted">Accepted formats: .xlsx, .xls, .csv — Max 10MB</small>
+                        </div>
+                        <div class="form-group mb-0">
+                            <p class="mb-1 font-weight-bold text-muted small">Notes:</p>
+                            <ul class="small text-muted mb-0">
+                                <li>Duplicate records (same employee + date) will be skipped automatically.</li>
+                                <li>Employee Code must match exactly as entered in the system.</li>
+                                <li>Site Name is case-insensitive.</li>
+                                <li>Status must be one of: <code>present</code>, <code>late</code>, <code>absent</code></li>
+                                <li>Times should be in <code>HH:MM</code> (24-hour) format, e.g. <code>09:00</code></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-upload mr-1"></i> Import
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -282,6 +390,47 @@
                                         <td>{{ $attendance->notes }}</td>
                                     </tr>
                                     @endif
+                                    @php
+                                        $completedBreaks = $attendance->breaks->filter(fn($b) => !is_null($b->break_in_time));
+                                        $totalBreakMins = $completedBreaks->sum(fn($b) =>
+                                            abs(\Carbon\Carbon::parse($b->break_out_time)->diffInMinutes(\Carbon\Carbon::parse($b->break_in_time)))
+                                        );
+                                    @endphp
+                                    @if($attendance->breaks->count() > 0)
+                                    <tr>
+                                        <th>Break Duration:</th>
+                                        <td>
+                                            @if($totalBreakMins > 0)
+                                                @if(floor($totalBreakMins / 60) > 0)
+                                                    {{ floor($totalBreakMins / 60) }}h {{ $totalBreakMins % 60 }}m
+                                                @else
+                                                    {{ $totalBreakMins }}m
+                                                @endif
+                                            @else
+                                                -
+                                            @endif
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Break Details:</th>
+                                        <td>
+                                            @foreach($attendance->breaks as $break)
+                                                <div class="small {{ !$loop->last ? 'mb-1' : '' }}">
+                                                    <span class="text-muted">Break {{ $loop->iteration }}:</span>
+                                                    {{ \Carbon\Carbon::parse($break->break_out_time)->format('h:i A') }}
+                                                    @if($break->break_in_time)
+                                                        &rarr; {{ \Carbon\Carbon::parse($break->break_in_time)->format('h:i A') }}
+                                                        <span class="badge badge-secondary">
+                                                            {{ abs(\Carbon\Carbon::parse($break->break_out_time)->diffInMinutes(\Carbon\Carbon::parse($break->break_in_time))) }}m
+                                                        </span>
+                                                    @else
+                                                        <span class="badge badge-warning">On break</span>
+                                                    @endif
+                                                </div>
+                                            @endforeach
+                                        </td>
+                                    </tr>
+                                    @endif
                                 </table>
                             </div>
                             <div class="col-md-6">
@@ -329,3 +478,12 @@
     @endforeach
 </section>
 @endsection
+
+@push('scripts')
+<script>
+    document.getElementById('importFile').addEventListener('change', function () {
+        var fileName = this.files[0] ? this.files[0].name : 'Choose file...';
+        this.nextElementSibling.textContent = fileName;
+    });
+</script>
+@endpush

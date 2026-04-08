@@ -140,6 +140,8 @@
                                     <td>
                                         @if($item['payment'] && $item['payment']->status === 'pending')
                                             <input type="checkbox" name="payment_ids[]" value="{{ $item['payment']->id }}" class="payment-checkbox">
+                                        @elseif(!$item['payment'])
+                                            <input type="checkbox" class="employee-checkbox" value="{{ $item['employee']->id }}">
                                         @endif
                                     </td>
                                     <td>
@@ -247,14 +249,36 @@
 
 <script>
 function toggleAll(source) {
-    const checkboxes = document.querySelectorAll('.payment-checkbox');
+    const checkboxes = document.querySelectorAll('.payment-checkbox, .employee-checkbox');
     checkboxes.forEach(checkbox => checkbox.checked = source.checked);
 }
 
 function confirmGenerate() {
+    const selectedEmployees = document.querySelectorAll('.employee-checkbox:checked');
+    const form = document.getElementById('generatePaymentForm');
+
+    // Remove any previously added employee_ids hidden inputs
+    form.querySelectorAll('input[name="employee_ids[]"]').forEach(el => el.remove());
+
+    let text, title;
+    if (selectedEmployees.length > 0) {
+        title = 'Generate for Selected Employees?';
+        text = `This will generate payment records for ${selectedEmployees.length} selected employee(s).`;
+        selectedEmployees.forEach(cb => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'employee_ids[]';
+            input.value = cb.value;
+            form.appendChild(input);
+        });
+    } else {
+        title = 'Generate Payment Records?';
+        text = 'This will generate payment records for all employees with attendance this week.';
+    }
+
     Swal.fire({
-        title: 'Generate Payment Records?',
-        text: 'This will generate payment records for all employees with attendance this week.',
+        title: title,
+        text: text,
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#007bff',
@@ -263,7 +287,10 @@ function confirmGenerate() {
         cancelButtonText: 'Cancel'
     }).then((result) => {
         if (result.isConfirmed) {
-            document.getElementById('generatePaymentForm').submit();
+            form.submit();
+        } else {
+            // Clean up if cancelled
+            form.querySelectorAll('input[name="employee_ids[]"]').forEach(el => el.remove());
         }
     });
 }

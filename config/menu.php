@@ -103,7 +103,14 @@ return [
         [
             'title' => 'HR & WORKFORCE',
             'type' => 'header',
-            'permission' => 'employees.view|attendance.view|designations.view|salary.view',
+            'permission' => 'employees.view|attendance.view|designations.view|designation_categories.view|salary.view',
+        ],
+        [
+            'title' => 'Designation Categories',
+            'route' => 'designation-categories.index',
+            'icon' => 'fas fa-layer-group',
+            'active' => 'designation-categories*',
+            'permission' => 'designation_categories.view',
         ],
         [
             'title' => 'Designations',
