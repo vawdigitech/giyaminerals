@@ -132,8 +132,10 @@
                                             @endif
                                         </a>
                                     </th>
-                                    <th>Daily Rate</th>
-                                    <th>Working Hours</th>
+                                    <th>Site Daily Rate</th>
+                                    <th>Site Hours</th>
+                                    <th>Factory Daily Rate</th>
+                                    <th>Factory Hours</th>
                                     <th>Status</th>
                                     <th style="width: 150px;">Actions</th>
                                 </tr>
@@ -147,8 +149,10 @@
                                         <td>{{ $employee->designation->category->name ?? '-' }}</td>
                                         <td>{{ $employee->phone ?? '-' }}</td>
                                         <td>{{ $employee->site->name ?? '-' }}</td>
-                                        <td>₹{{ number_format($employee->daily_rate, 2) }}</td>
+                                        <td>{{ $employee->daily_rate ? '₹' . number_format($employee->daily_rate, 2) : '-' }}</td>
                                         <td>{{ $employee->working_hours ?? '-' }}</td>
+                                        <td>{{ $employee->factory_daily_rate ? '₹' . number_format($employee->factory_daily_rate, 2) : '-' }}</td>
+                                        <td>{{ $employee->factory_working_hours ?? '-' }}</td>
                                         <td>
                                             <span class="badge badge-{{ $employee->status === 'active' ? 'success' : 'secondary' }}">
                                                 {{ ucfirst($employee->status) }}
@@ -174,7 +178,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="10" class="text-center">No employees found.</td>
+                                        <td colspan="13" class="text-center">No employees found.</td>
                                     </tr>
                                 @endforelse
                             </tbody>

@@ -18,11 +18,13 @@ class AnalyticsController extends Controller
 {
     public function profitLoss(Request $request)
     {
-        $query = Project::with('site');
+        $query = Project::with(['sites', 'factories']);
 
         // Filter by site
         if ($request->filled('site_id')) {
-            $query->where('site_id', $request->site_id);
+            $query->whereHas('sites', function ($q) use ($request) {
+                $q->where('sites.id', $request->site_id);
+            });
         }
 
         // Filter by status
@@ -183,7 +185,7 @@ class AnalyticsController extends Controller
 
         $query = Project::with(['tasks' => function ($q) {
             $q->whereNull('parent_id')->with('subtasks');
-        }, 'site']);
+        }, 'sites', 'factories']);
 
         if ($projectId) {
             $query->where('id', $projectId);
@@ -235,7 +237,7 @@ class AnalyticsController extends Controller
         ];
 
         // Recent projects
-        $recentProjects = Project::with('site')
+        $recentProjects = Project::with(['sites', 'factories'])
             ->orderBy('created_at', 'desc')
             ->limit(5)
             ->get();

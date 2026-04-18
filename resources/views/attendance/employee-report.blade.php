@@ -1,8 +1,13 @@
 @extends('layouts.app')
 @section('page_title', 'Employee Attendance Report')
 @section('breadcrumb')
+    @php
+        $currentRoute = Route::currentRouteName();
+        $indexRoute = str_contains($currentRoute, 'factory') ? 'factory-attendance.index' : 'site-attendance.index';
+        $reportTitle = str_contains($currentRoute, 'factory') ? 'Factory Attendance Report' : 'Site Attendance Report';
+    @endphp
     <li class="breadcrumb-item"><a href="{{ route('dashboard.index') }}">Dashboard</a></li>
-    <li class="breadcrumb-item"><a href="{{ route('attendance.index') }}">Attendance Report</a></li>
+    <li class="breadcrumb-item"><a href="{{ route($indexRoute) }}">{{ $reportTitle }}</a></li>
     <li class="breadcrumb-item active">{{ $employee->name }}</li>
 @endsection
 @section('content')
@@ -146,8 +151,13 @@
 
         <!-- Back Link -->
         <div class="mb-3">
-            <a href="{{ route('attendance.index') }}" class="btn btn-outline-secondary">
-                <i class="fas fa-arrow-left"></i> Back to Attendance Report
+            @php
+                $currentRoute = Route::currentRouteName();
+                $indexRoute = str_contains($currentRoute, 'factory') ? 'factory-attendance.index' : 'site-attendance.index';
+                $reportTitle = str_contains($currentRoute, 'factory') ? 'Factory Attendance Report' : 'Site Attendance Report';
+            @endphp
+            <a href="{{ route($indexRoute) }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back to {{ $reportTitle }}
             </a>
         </div>
 

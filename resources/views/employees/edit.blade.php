@@ -107,6 +107,50 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
+                                        <label for="site_id">Assigned Site</label>
+                                        <select class="form-control @error('site_id') is-invalid @enderror"
+                                            id="site_id" name="site_id">
+                                            <option value="">-- Not Assigned --</option>
+                                            @foreach($sites as $site)
+                                                <option value="{{ $site->id }}"
+                                                    {{ old('site_id', $employee->site_id) == $site->id ? 'selected' : '' }}>
+                                                    {{ $site->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        @error('site_id')
+                                            <span class="invalid-feedback">{{ $message }}</span>
+                                        @enderror
+                                        <small class="text-muted">Assign to either a Site OR Factory, not both</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="factory_id">Assigned Factory</label>
+                                        <select class="form-control @error('factory_id') is-invalid @enderror"
+                                            id="factory_id" name="factory_id">
+                                            <option value="">-- Not Assigned --</option>
+                                            @foreach($factories as $factory)
+                                                <option value="{{ $factory->id }}"
+                                                    {{ old('factory_id', $employee->factory_id) == $factory->id ? 'selected' : '' }}>
+                                                    {{ $factory->name }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        @error('factory_id')
+                                            <span class="invalid-feedback">{{ $message }}</span>
+                                        @enderror
+                                        <small class="text-muted">Assign to either a Site OR Factory, not both</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr class="my-3">
+                            <h5 class="mb-3">Site/Regular Wage Rates</h5>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
                                         <label for="daily_rate">Daily Rate (₹) <span class="text-danger">*</span></label>
                                         <input type="number" step="0.01" min="0"
                                             class="form-control @error('daily_rate') is-invalid @enderror"
@@ -132,25 +176,40 @@
                                 </div>
                             </div>
 
+                            <hr class="my-3">
+                            <h5 class="mb-3">Factory Wage Rates (Optional)</h5>
+                            <p class="text-muted small">If employee works at a factory, these rates will be used instead of the regular rates above.</p>
+
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        <label for="site_id">Assigned Site</label>
-                                        <select class="form-control @error('site_id') is-invalid @enderror"
-                                            id="site_id" name="site_id">
-                                            <option value="">-- Not Assigned --</option>
-                                            @foreach($sites as $site)
-                                                <option value="{{ $site->id }}"
-                                                    {{ old('site_id', $employee->site_id) == $site->id ? 'selected' : '' }}>
-                                                    {{ $site->name }}
-                                                </option>
-                                            @endforeach
-                                        </select>
-                                        @error('site_id')
+                                        <label for="factory_daily_rate">Factory Daily Rate (₹)</label>
+                                        <input type="number" step="0.01" min="0"
+                                            class="form-control @error('factory_daily_rate') is-invalid @enderror"
+                                            id="factory_daily_rate" name="factory_daily_rate"
+                                            value="{{ old('factory_daily_rate', $employee->factory_daily_rate) }}">
+                                        @error('factory_daily_rate')
                                             <span class="invalid-feedback">{{ $message }}</span>
                                         @enderror
+                                        <small class="text-muted">Daily wage when working at factory</small>
                                     </div>
                                 </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="factory_working_hours">Factory Working Hours</label>
+                                        <input type="number" step="0.5" min="1" max="24"
+                                            class="form-control @error('factory_working_hours') is-invalid @enderror"
+                                            id="factory_working_hours" name="factory_working_hours"
+                                            value="{{ old('factory_working_hours', $employee->factory_working_hours) }}">
+                                        @error('factory_working_hours')
+                                            <span class="invalid-feedback">{{ $message }}</span>
+                                        @enderror
+                                        <small class="text-muted">Standard hours per day at factory</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label for="status">Status <span class="text-danger">*</span></label>

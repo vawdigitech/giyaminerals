@@ -10,7 +10,6 @@ class Project extends Model
         'code',
         'name',
         'description',
-        'site_id',
         'quoted_amount',
         'actual_amount',
         'status',
@@ -29,14 +28,92 @@ class Project extends Model
         'actual_end_date' => 'date',
     ];
 
-    public function site()
+    /**
+     * Many-to-many relationship with sites through project_locations
+     */
+    public function sites()
     {
-        return $this->belongsTo(Site::class);
+        return $this->belongsToMany(Site::class, 'project_locations')
+            ->withTimestamps();
+    }
+
+    /**
+     * Many-to-many relationship with factories through project_locations
+     */
+    public function factories()
+    {
+        return $this->belongsToMany(Factory::class, 'project_locations')
+            ->withTimestamps();
     }
 
     public function tasks()
     {
         return $this->hasMany(Task::class);
+    }
+
+    /**
+     * Get all locations (sites and factories) for this project
+     */
+    public function locations()
+    {
+        $locations = [];
+
+        foreach ($this->sites as $site) {
+            $locations[] = [
+                'type' => 'site',
+                'id' => $site->id,
+                'name' => $site->name,
+                'model' => $site,
+            ];
+        }
+
+        foreach ($this->factories as $factory) {
+            $locations[] = [
+                'type' => 'factory',
+                'id' => $factory->id,
+                'name' => $factory->name,
+                'model' => $factory,
+            ];
+        }
+
+        return collect($locations);
+    }
+
+    /**
+     * Get tasks for a specific location (site or factory)
+     */
+    public function tasksAtLocation($locationType, $locationId)
+    {
+        if ($locationType === 'site') {
+            return $this->tasks()->where('site_id', $locationId)->get();
+        } elseif ($locationType === 'factory') {
+            return $this->tasks()->where('factory_id', $locationId)->get();
+        }
+        return collect();
+    }
+
+    /**
+     * Check if this project has any factory locations
+     */
+    public function hasFactoryLocations()
+    {
+        return $this->factories()->count() > 0;
+    }
+
+    /**
+     * Check if this project has any site locations
+     */
+    public function hasSiteLocations()
+    {
+        return $this->sites()->count() > 0;
+    }
+
+    /**
+     * Get all location names as a comma-separated string
+     */
+    public function getLocationNames()
+    {
+        return $this->locations()->pluck('name')->join(', ');
     }
 
     public function createdBy()

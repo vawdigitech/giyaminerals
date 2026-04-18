@@ -8,6 +8,7 @@ class TaskProgressPhoto extends Model
 {
     protected $fillable = [
         'task_id',
+        'user_id',
         'employee_id',
         'photo',
         'caption',
@@ -21,6 +22,11 @@ class TaskProgressPhoto extends Model
     public function task()
     {
         return $this->belongsTo(Task::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 
     public function employee()

@@ -35,6 +35,12 @@
     .sub-indent { padding-left: 28px !important; color: #495057; }
     .sub-connector { color: #adb5bd; font-family: monospace; margin-right: 4px; }
 
+    /* Multi-level nesting styles */
+    .sub-row[data-level="2"] { background: #f8f9fa; border-left-color: #d0daea; }
+    .sub-row[data-level="3"] { background: #f1f3f5; border-left-color: #c0cadf; }
+    .sub-row[data-level="4"] { background: #ebeef2; border-left-color: #b0bad4; }
+    .sub-row[data-level]:hover { background: #e3f2fd !important; }
+
     .progress-col { min-width: 90px; }
     .cost-col { white-space: nowrap; }
 
@@ -147,8 +153,16 @@
                     <span style="font-size:12px; opacity:.8; margin-left:8px;">{{ $project->code }}</span>
                 </div>
 
-                @if($project->site)
-                    <span style="font-size:12px; opacity:.75;"><i class="fas fa-map-marker-alt mr-1"></i>{{ $project->site->name }}</span>
+                @if($project->sites->count() > 0 || $project->factories->count() > 0)
+                    <span style="font-size:12px; opacity:.75;">
+                        <i class="fas fa-map-marker-alt mr-1"></i>
+                        @foreach($project->sites as $site)
+                            {{ $site->name }}{{ !$loop->last || $project->factories->count() > 0 ? ', ' : '' }}
+                        @endforeach
+                        @foreach($project->factories as $factory)
+                            {{ $factory->name }}{{ !$loop->last ? ', ' : '' }}
+                        @endforeach
+                    </span>
                 @endif
 
                 <!-- Progress bar -->
@@ -267,69 +281,26 @@
                             </td>
                         </tr>
 
-                        {{-- Subtasks --}}
-                        @foreach($task->subtasks as $sub)
-                        <tr class="sub-row">
-                            <td class="sub-indent">
-                                <span class="sub-connector">└─</span>
-                                <a href="{{ route('tasks.show', $sub) }}" class="text-secondary">{{ $sub->code }}</a>
-                            </td>
-                            <td>
-                                <a href="{{ route('tasks.show', $sub) }}" class="text-secondary">{{ $sub->name }}</a>
-                            </td>
-                            <td>
-                                @if($sub->section)
-                                    <span class="section-tag">{{ $sub->section }}</span>
-                                @else <span class="text-muted">—</span>
-                                @endif
-                            </td>
-                            <td class="cost-col text-muted">
-                                @if($sub->quoted_amount)
-                                    ₹{{ number_format($sub->quoted_amount, 2) }}
-                                @else
-                                    —
-                                @endif
-                            </td>
-                            <td class="progress-col">
-                                <div class="progress progress-xs mb-1">
-                                    <div class="progress-bar bg-{{ $sub->progress >= 100 ? 'success' : 'info' }}"
-                                         style="width:{{ $sub->progress }}%"></div>
-                                </div>
-                                <small class="text-muted">{{ $sub->progress }}%</small>
-                            </td>
-                            <td>
-                                <span class="badge badge-{{ $priorityColors[$sub->priority] ?? 'secondary' }}" style="font-size:10px;">
-                                    {{ ucfirst($sub->priority) }}
-                                </span>
-                            </td>
-                            <td>
-                                <span class="badge badge-{{ $statusColors[$sub->status] ?? 'secondary' }}" style="font-size:10px;">
-                                    {{ ucwords(str_replace('_',' ', $sub->status)) }}
-                                </span>
-                            </td>
-                            <td class="cost-col text-muted">₹{{ number_format($sub->labor_cost ?? 0, 2) }}</td>
-                            <td class="cost-col text-muted">₹{{ number_format($sub->material_cost ?? 0, 2) }}</td>
-                            <td>
-                                <a href="{{ route('tasks.show', $sub) }}" class="btn btn-xs btn-info" title="View">
-                                    <i class="fas fa-eye"></i>
-                                </a>
-                                @can('tasks.edit')
-                                <a href="{{ route('tasks.edit', $sub) }}" class="btn btn-xs btn-warning" title="Edit">
-                                    <i class="fas fa-edit"></i>
-                                </a>
-                                @endcan
-                            </td>
-                        </tr>
-                        @endforeach
+                        {{-- Subtasks (recursive) --}}
+                        @if($task->relationLoaded('allSubtasks') && $task->allSubtasks->count() > 0)
+                            @include('tasks.partials.subtask-row', [
+                                'subtasks' => $task->allSubtasks,
+                                'level' => 1,
+                                'priorityColors' => $priorityColors,
+                                'statusColors' => $statusColors
+                            ])
+                        @endif
 
                     @endforeach
                     </tbody>
 
                     {{-- Project totals footer --}}
                     @php
-                        $projQuotedTotal   = $project->tasks->sum('quoted_amount');
-                        $projLaborTotal    = $project->tasks->sum('labor_cost');
-                        $projMaterialTotal = $project->tasks->sum('material_cost');
+                        // Sum only top-level tasks' aggregated amounts to avoid double counting
+                        $topLevelTasks     = $project->tasks->whereNull('parent_id');
+                        $projQuotedTotal   = $topLevelTasks->sum('aggregated_quoted_amount');
+                        $projLaborTotal    = $topLevelTasks->sum('aggregated_labor_cost');
+                        $projMaterialTotal = $topLevelTasks->sum('aggregated_material_cost');
                     @endphp
                     <tfoot>
                         <tr style="background:#f4f6f9; font-weight:600; font-size:12px;">

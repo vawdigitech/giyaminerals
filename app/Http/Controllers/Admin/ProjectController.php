@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\Site;
+use App\Models\Factory;
 use Illuminate\Http\Request;
 
 class ProjectController extends Controller
@@ -20,11 +21,13 @@ class ProjectController extends Controller
             'on_hold' => Project::where('status', 'on_hold')->count(),
         ];
 
-        $query = Project::with('site')->withCount('tasks');
+        $query = Project::with(['sites', 'factories'])->withCount('tasks');
 
-        // Filter by site
+        // Filter by site (using many-to-many relationship)
         if ($request->filled('site_id')) {
-            $query->where('site_id', $request->site_id);
+            $query->whereHas('sites', function ($q) use ($request) {
+                $q->where('sites.id', $request->site_id);
+            });
         }
 
         // Filter by status
@@ -50,8 +53,9 @@ class ProjectController extends Controller
     public function create()
     {
         $sites = Site::orderBy('name')->get();
+        $factories = Factory::orderBy('name')->get();
         $nextCode = $this->generateNextCode();
-        return view('projects.create', compact('sites', 'nextCode'));
+        return view('projects.create', compact('sites', 'factories', 'nextCode'));
     }
 
     public function generateCode()
@@ -79,14 +83,47 @@ class ProjectController extends Controller
             'code' => 'required|string|max:50|unique:projects',
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'site_id' => 'required|exists:sites,id',
+            'site_ids' => 'nullable|array',
+            'site_ids.*' => 'exists:sites,id',
+            'factory_ids' => 'nullable|array',
+            'factory_ids.*' => 'exists:factories,id',
             'quoted_amount' => 'required|numeric|min:0',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'status' => 'required|in:pending,in_progress,completed,on_hold',
         ]);
 
-        Project::create($validated);
+        // Ensure at least one location is selected
+        if (empty($validated['site_ids']) && empty($validated['factory_ids'])) {
+            return redirect()->back()
+                ->withInput()
+                ->withErrors(['location' => 'Please select at least one site or factory.']);
+        }
+
+        // Create project
+        $project = Project::create([
+            'code' => $validated['code'],
+            'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
+            'quoted_amount' => $validated['quoted_amount'],
+            'start_date' => $validated['start_date'] ?? null,
+            'end_date' => $validated['end_date'] ?? null,
+            'status' => $validated['status'],
+        ]);
+
+        // Attach sites
+        if (!empty($validated['site_ids'])) {
+            foreach ($validated['site_ids'] as $siteId) {
+                $project->sites()->attach($siteId);
+            }
+        }
+
+        // Attach factories
+        if (!empty($validated['factory_ids'])) {
+            foreach ($validated['factory_ids'] as $factoryId) {
+                $project->factories()->attach($factoryId);
+            }
+        }
 
         return redirect()->route('projects.index')
             ->with('success', 'Project created successfully.');
@@ -94,7 +131,7 @@ class ProjectController extends Controller
 
     public function show(Project $project)
     {
-        $project->load(['site', 'tasks' => function ($q) {
+        $project->load(['sites', 'factories', 'tasks' => function ($q) {
             $q->whereNull('parent_id')->with('subtasks');
         }]);
 
@@ -128,8 +165,10 @@ class ProjectController extends Controller
 
     public function edit(Project $project)
     {
+        $project->load(['sites', 'factories']);
         $sites = Site::orderBy('name')->get();
-        return view('projects.edit', compact('project', 'sites'));
+        $factories = Factory::orderBy('name')->get();
+        return view('projects.edit', compact('project', 'sites', 'factories'));
     }
 
     public function update(Request $request, Project $project)
@@ -138,14 +177,47 @@ class ProjectController extends Controller
             'code' => 'required|string|max:50|unique:projects,code,' . $project->id,
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'site_id' => 'required|exists:sites,id',
+            'site_ids' => 'nullable|array',
+            'site_ids.*' => 'exists:sites,id',
+            'factory_ids' => 'nullable|array',
+            'factory_ids.*' => 'exists:factories,id',
             'quoted_amount' => 'required|numeric|min:0',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'status' => 'required|in:pending,in_progress,completed,on_hold',
         ]);
 
-        $project->update($validated);
+        // Ensure at least one location is selected
+        if (empty($validated['site_ids']) && empty($validated['factory_ids'])) {
+            return redirect()->back()
+                ->withInput()
+                ->withErrors(['location' => 'Please select at least one site or factory.']);
+        }
+
+        // Update project
+        $project->update([
+            'code' => $validated['code'],
+            'name' => $validated['name'],
+            'description' => $validated['description'] ?? null,
+            'quoted_amount' => $validated['quoted_amount'],
+            'start_date' => $validated['start_date'] ?? null,
+            'end_date' => $validated['end_date'] ?? null,
+            'status' => $validated['status'],
+        ]);
+
+        // Sync sites
+        if (isset($validated['site_ids'])) {
+            $project->sites()->sync($validated['site_ids']);
+        } else {
+            $project->sites()->detach();
+        }
+
+        // Sync factories
+        if (isset($validated['factory_ids'])) {
+            $project->factories()->sync($validated['factory_ids']);
+        } else {
+            $project->factories()->detach();
+        }
 
         return redirect()->route('projects.index')
             ->with('success', 'Project updated successfully.');
@@ -162,5 +234,36 @@ class ProjectController extends Controller
 
         return redirect()->route('projects.index')
             ->with('success', 'Project deleted successfully.');
+    }
+
+    /**
+     * Get project locations (API endpoint for task creation)
+     */
+    public function getLocations(Project $project)
+    {
+        $project->load(['sites', 'factories']);
+
+        $locations = [];
+
+        foreach ($project->sites as $site) {
+            $locations[] = [
+                'type' => 'site',
+                'id' => $site->id,
+                'name' => $site->name . ' (Site)',
+            ];
+        }
+
+        foreach ($project->factories as $factory) {
+            $locations[] = [
+                'type' => 'factory',
+                'id' => $factory->id,
+                'name' => $factory->name . ' (Factory)',
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'locations' => $locations,
+        ]);
     }
 }

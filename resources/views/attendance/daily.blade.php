@@ -1,8 +1,13 @@
 @extends('layouts.app')
 @section('page_title', "Today's Attendance")
 @section('breadcrumb')
+    @php
+        $currentRoute = Route::currentRouteName();
+        $indexRoute = str_contains($currentRoute, 'factory') ? 'factory-attendance.index' : 'site-attendance.index';
+        $reportTitle = str_contains($currentRoute, 'factory') ? 'Factory Attendance Report' : 'Site Attendance Report';
+    @endphp
     <li class="breadcrumb-item"><a href="{{ route('dashboard.index') }}">Dashboard</a></li>
-    <li class="breadcrumb-item"><a href="{{ route('attendance.index') }}">Attendance Report</a></li>
+    <li class="breadcrumb-item"><a href="{{ route($indexRoute) }}">{{ $reportTitle }}</a></li>
     <li class="breadcrumb-item active">Daily Attendance</li>
 @endsection
 @section('content')
@@ -51,7 +56,11 @@
         <!-- Filters -->
         <div class="card card-outline card-primary mb-3">
             <div class="card-body">
-                <form method="GET" action="{{ route('attendance.daily') }}" class="row g-3">
+                @php
+                    $currentRoute = Route::currentRouteName();
+                    $dailyRoute = str_contains($currentRoute, 'factory') ? 'factory-attendance.daily' : 'site-attendance.daily';
+                @endphp
+                <form method="GET" action="{{ route($dailyRoute) }}" class="row g-3">
                     <div class="col-md-3">
                         <input type="date" name="date" class="form-control" value="{{ $date }}">
                     </div>
@@ -66,8 +75,18 @@
                         </select>
                     </div>
                     <div class="col-md-3">
+                        <select name="factory_id" class="form-control">
+                            <option value="">All Factories</option>
+                            @foreach($factories as $factory)
+                                <option value="{{ $factory->id }}" {{ request('factory_id') == $factory->id ? 'selected' : '' }}>
+                                    {{ $factory->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-3">
                         <button type="submit" class="btn btn-primary">Filter</button>
-                        <a href="{{ route('attendance.daily') }}" class="btn btn-secondary">Reset</a>
+                        <a href="{{ route($dailyRoute) }}" class="btn btn-secondary">Reset</a>
                     </div>
                 </form>
             </div>
@@ -75,8 +94,13 @@
 
         <!-- Back Link -->
         <div class="mb-3">
-            <a href="{{ route('attendance.index') }}" class="btn btn-outline-secondary">
-                <i class="fas fa-arrow-left"></i> Back to Attendance Report
+            @php
+                $currentRoute = Route::currentRouteName();
+                $indexRoute = str_contains($currentRoute, 'factory') ? 'factory-attendance.index' : 'site-attendance.index';
+                $reportTitle = str_contains($currentRoute, 'factory') ? 'Factory Attendance Report' : 'Site Attendance Report';
+            @endphp
+            <a href="{{ route($indexRoute) }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back to {{ $reportTitle }}
             </a>
         </div>
 
@@ -90,7 +114,7 @@
                     <thead>
                         <tr>
                             <th>Employee</th>
-                            <th>Site</th>
+                            <th>Location</th>
                             <th>Check In</th>
                             <th>Check Out</th>
                             <th class="text-center">Hours</th>
@@ -107,7 +131,17 @@
                                     </a>
                                     <br><small class="text-muted">{{ $attendance->employee->employee_code ?? '' }}</small>
                                 </td>
-                                <td>{{ $attendance->site->name ?? '-' }}</td>
+                                <td>
+                                    @if($attendance->factory_id)
+                                        <span class="badge badge-primary">Factory</span>
+                                        {{ $attendance->factory->name ?? '-' }}
+                                    @elseif($attendance->site_id)
+                                        <span class="badge badge-info">Site</span>
+                                        {{ $attendance->site->name ?? '-' }}
+                                    @else
+                                        -
+                                    @endif
+                                </td>
                                 <td>{{ $attendance->check_in_time ? \Carbon\Carbon::parse($attendance->check_in_time)->format('h:i A') : '-' }}</td>
                                 <td>{{ $attendance->check_out_time ? \Carbon\Carbon::parse($attendance->check_out_time)->format('h:i A') : '-' }}</td>
                                 <td class="text-center">{{ $attendance->total_hours ? number_format($attendance->total_hours, 2) : '-' }}</td>
@@ -147,7 +181,7 @@
                         <tr>
                             <th>Employee Code</th>
                             <th>Employee Name</th>
-                            <th>Site</th>
+                            <th>Location</th>
                             <th>Position</th>
                         </tr>
                     </thead>
@@ -160,7 +194,17 @@
                                         {{ $employee->name }}
                                     </a>
                                 </td>
-                                <td>{{ $employee->site->name ?? '-' }}</td>
+                                <td>
+                                    @if($employee->factory_id)
+                                        <span class="badge badge-primary">Factory</span>
+                                        {{ $employee->factory->name ?? '-' }}
+                                    @elseif($employee->site_id)
+                                        <span class="badge badge-info">Site</span>
+                                        {{ $employee->site->name ?? '-' }}
+                                    @else
+                                        -
+                                    @endif
+                                </td>
                                 <td>{{ $employee->position ?? '-' }}</td>
                             </tr>
                         @endforeach
@@ -200,8 +244,16 @@
                                         <td>{{ $attendance->employee->name ?? '-' }} ({{ $attendance->employee->employee_code ?? '' }})</td>
                                     </tr>
                                     <tr>
-                                        <th>Site:</th>
-                                        <td>{{ $attendance->site->name ?? '-' }}</td>
+                                        <th>Location:</th>
+                                        <td>
+                                            @if($attendance->factory_id)
+                                                <span class="badge badge-primary">Factory</span> {{ $attendance->factory->name ?? '-' }}
+                                            @elseif($attendance->site_id)
+                                                <span class="badge badge-info">Site</span> {{ $attendance->site->name ?? '-' }}
+                                            @else
+                                                -
+                                            @endif
+                                        </td>
                                     </tr>
                                     <tr>
                                         <th>Check In:</th>

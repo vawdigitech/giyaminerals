@@ -130,7 +130,18 @@
                                     <tr>
                                         <td>{{ $project->code }}</td>
                                         <td>{{ $project->name }}</td>
-                                        <td>{{ $project->site->name ?? '-' }}</td>
+                                        <td>
+                                            @if($project->sites->count() > 0 || $project->factories->count() > 0)
+                                                @foreach($project->sites as $site)
+                                                    <span class="badge badge-info">{{ $site->name }}</span>
+                                                @endforeach
+                                                @foreach($project->factories as $factory)
+                                                    <span class="badge badge-secondary">{{ $factory->name }}</span>
+                                                @endforeach
+                                            @else
+                                                <span class="text-muted">-</span>
+                                            @endif
+                                        </td>
                                         <td>₹{{ number_format($project->quoted_amount, 2) }}</td>
                                         <td>
                                             <div class="progress progress-sm">

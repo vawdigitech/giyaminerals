@@ -45,14 +45,38 @@
                                             id="parent_id" name="parent_id">
                                             <option value="">-- No Parent (Master Task) --</option>
                                             @foreach($parentTasks as $task)
+                                                @php
+                                                    $level = $task->getNestingLevel();
+                                                    $indent = str_repeat('  ', $level);
+                                                    $prefix = $level > 0 ? '└─ ' : '';
+                                                    $displayName = $indent . $prefix . $task->code . ' - ' . $task->name;
+                                                @endphp
                                                 <option value="{{ $task->id }}" {{ old('parent_id') == $task->id ? 'selected' : '' }}>
-                                                    {{ $task->code }} - {{ $task->name }}
+                                                    {{ $displayName }}
                                                 </option>
                                             @endforeach
                                         </select>
                                         @error('parent_id')
                                             <span class="invalid-feedback">{{ $message }}</span>
                                         @enderror
+                                    </div>
+                                </div>
+                            </div>
+
+                            {{-- Step 2.5: Work Locations --}}
+                            <div class="row" id="locations-section" style="display: none;">
+                                <div class="col-md-12">
+                                    <div class="form-group">
+                                        <label>Work Locations <span class="text-danger">*</span></label>
+                                        <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                                            <div id="locations-list">
+                                                <p class="text-muted">Please select a project first</p>
+                                            </div>
+                                        </div>
+                                        @error('location_ids')
+                                            <span class="invalid-feedback d-block">{{ $message }}</span>
+                                        @enderror
+                                        <small class="form-text text-muted">Select one or more locations where this task will be performed</small>
                                     </div>
                                 </div>
                             </div>
@@ -214,6 +238,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const codeInput      = document.getElementById('code');
     const codeHint       = document.getElementById('code-hint');
     const refreshBtn     = document.getElementById('refresh-code');
+    const locationsSection = document.getElementById('locations-section');
+    const locationsList = document.getElementById('locations-list');
+
+    // Project locations data passed from controller
+    const projectLocationsData = @json($projectLocations ?? []);
 
     function suggestCode() {
         const projectId = projectSelect.value;
@@ -241,6 +270,7 @@ document.addEventListener('DOMContentLoaded', function() {
             codeInput.placeholder = 'Select a project first';
             codeHint.textContent = '';
             refreshBtn.style.display = 'none';
+            locationsSection.style.display = 'none';
             return;
         }
 
@@ -250,7 +280,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 tasks.forEach(task => {
                     const opt = document.createElement('option');
                     opt.value = task.id;
-                    opt.textContent = `${task.code} - ${task.name}`;
+                    // Use display_name if available (includes hierarchy), otherwise fallback
+                    opt.textContent = task.display_name || `${task.code} - ${task.name}`;
                     parentSelect.appendChild(opt);
                 });
                 if (callback) callback();
@@ -258,8 +289,49 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(err => console.error('Error fetching parent tasks:', err));
     }
 
+    function loadProjectLocations(projectId) {
+        if (!projectId) {
+            locationsSection.style.display = 'none';
+            return;
+        }
+
+        // Fetch project locations
+        fetch(`/projects/${projectId}/locations`)
+            .then(r => r.json())
+            .then(data => {
+                locationsList.innerHTML = '';
+
+                if (data.locations && data.locations.length > 0) {
+                    data.locations.forEach(location => {
+                        const checkbox = document.createElement('div');
+                        checkbox.className = 'custom-control custom-checkbox';
+                        checkbox.innerHTML = `
+                            <input type="checkbox" class="custom-control-input location-checkbox"
+                                id="location_${location.type}_${location.id}"
+                                name="location_ids[]"
+                                value="${location.type}:${location.id}"
+                                checked>
+                            <label class="custom-control-label" for="location_${location.type}_${location.id}">
+                                ${location.name}
+                            </label>
+                        `;
+                        locationsList.appendChild(checkbox);
+                    });
+                    locationsSection.style.display = 'block';
+                } else {
+                    locationsList.innerHTML = '<p class="text-warning">No locations assigned to this project yet.</p>';
+                    locationsSection.style.display = 'block';
+                }
+            })
+            .catch(err => {
+                console.error('Error fetching locations:', err);
+                locationsList.innerHTML = '<p class="text-danger">Error loading locations</p>';
+            });
+    }
+
     projectSelect.addEventListener('change', function() {
         loadParentTasks(this.value, () => suggestCode());
+        loadProjectLocations(this.value);
     });
 
     parentSelect.addEventListener('change', function() {
@@ -284,6 +356,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 refreshBtn.style.display = 'inline-block';
             }
         });
+        loadProjectLocations(projectSelect.value);
+    } else if (projectLocationsData.length > 0) {
+        // If we have locations data from the server (from old input), show them
+        locationsList.innerHTML = '';
+        projectLocationsData.forEach(location => {
+            const checkbox = document.createElement('div');
+            checkbox.className = 'custom-control custom-checkbox';
+            checkbox.innerHTML = `
+                <input type="checkbox" class="custom-control-input location-checkbox"
+                    id="location_${location.type}_${location.id}"
+                    name="location_ids[]"
+                    value="${location.type}:${location.id}"
+                    checked>
+                <label class="custom-control-label" for="location_${location.type}_${location.id}">
+                    ${location.name}
+                </label>
+            `;
+            locationsList.appendChild(checkbox);
+        });
+        locationsSection.style.display = 'block';
     }
 });
 </script>

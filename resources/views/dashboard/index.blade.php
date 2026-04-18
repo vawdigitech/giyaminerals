@@ -596,7 +596,13 @@
                                         {{ Str::limit($project->name, 25) }}
                                     </a>
                                 </td>
-                                <td class="text-muted">{{ $project->site->name ?? '—' }}</td>
+                                <td class="text-muted">
+                                    @if($project->sites->count() > 0 || $project->factories->count() > 0)
+                                        {{ $project->sites->pluck('name')->concat($project->factories->pluck('name'))->join(', ') }}
+                                    @else
+                                        —
+                                    @endif
+                                </td>
                                 <td>
                                     <span class="badge-soft {{ $statusClass }}">
                                         {{ ucfirst(str_replace('_', ' ', $project->status)) }}

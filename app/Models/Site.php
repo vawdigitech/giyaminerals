@@ -24,9 +24,21 @@ class Site extends Model
         return $this->hasMany(Employee::class);
     }
 
+    /**
+     * Many-to-many relationship with projects through project_locations
+     */
     public function projects()
     {
-        return $this->hasMany(Project::class);
+        return $this->belongsToMany(Project::class, 'project_locations')
+            ->withTimestamps();
+    }
+
+    /**
+     * Get tasks at this site
+     */
+    public function tasks()
+    {
+        return $this->hasMany(Task::class);
     }
 
     public function attendances()

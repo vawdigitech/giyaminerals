@@ -12,18 +12,22 @@ class ProjectController extends Controller
     {
         $user = $request->user();
 
-        $query = Project::with(['site', 'tasks' => function ($q) {
+        $query = Project::with(['sites', 'factories', 'tasks' => function ($q) {
             $q->whereNull('parent_id'); // Only top-level tasks
         }]);
 
         // Supervisors only see projects at their site
         if ($user->isSupervisor() && $user->site_id) {
-            $query->where('site_id', $user->site_id);
+            $query->whereHas('sites', function ($q) use ($user) {
+                $q->where('sites.id', $user->site_id);
+            });
         }
 
         // Filter by site
         if ($request->has('site_id')) {
-            $query->where('site_id', $request->site_id);
+            $query->whereHas('sites', function ($q) use ($request) {
+                $q->where('sites.id', $request->site_id);
+            });
         }
 
         // Filter by status
@@ -56,7 +60,8 @@ class ProjectController extends Controller
     public function show(Project $project)
     {
         $project->load([
-            'site',
+            'sites',
+            'factories',
             'tasks' => function ($q) {
                 $q->whereNull('parent_id')
                   ->with(['subtasks', 'activeAssignments.employee']);
@@ -80,7 +85,9 @@ class ProjectController extends Controller
         $query = Project::query();
 
         if ($siteId) {
-            $query->where('site_id', $siteId);
+            $query->whereHas('sites', function ($q) use ($siteId) {
+                $q->where('sites.id', $siteId);
+            });
         }
 
         $totalProjects = $query->count();

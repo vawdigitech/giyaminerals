@@ -127,6 +127,59 @@
                     </div>
                 </div>
 
+                <!-- Location-wise Costs Card -->
+                @if(!$task->hasSubtasks() && $task->taskLocations->count() > 0)
+                <div class="card card-info">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="fas fa-map-marker-alt mr-1"></i> Location-wise Costs</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Location</th>
+                                    <th class="text-right">Labor</th>
+                                    <th class="text-right">Material</th>
+                                    <th class="text-right">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @php
+                                    $totalLocationLabor = 0;
+                                    $totalLocationMaterial = 0;
+                                @endphp
+                                @foreach($task->taskLocations as $taskLocation)
+                                    @php
+                                        $location = $taskLocation->getLocation();
+                                        $locationType = $taskLocation->location_type === 'site' ? 'Site' : 'Factory';
+                                        $totalLocationLabor += $taskLocation->labor_cost ?? 0;
+                                        $totalLocationMaterial += $taskLocation->material_cost ?? 0;
+                                    @endphp
+                                    <tr>
+                                        <td>
+                                            <i class="fas fa-{{ $taskLocation->location_type === 'site' ? 'map-marker-alt' : 'industry' }} mr-1 text-muted"></i>
+                                            {{ $location->name ?? 'Unknown' }}
+                                            <small class="text-muted">({{ $locationType }})</small>
+                                        </td>
+                                        <td class="text-right">₹{{ number_format($taskLocation->labor_cost ?? 0, 2) }}</td>
+                                        <td class="text-right">₹{{ number_format($taskLocation->material_cost ?? 0, 2) }}</td>
+                                        <td class="text-right"><strong>₹{{ number_format($taskLocation->total_cost ?? 0, 2) }}</strong></td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                            <tfoot class="bg-light">
+                                <tr>
+                                    <th>Total</th>
+                                    <th class="text-right">₹{{ number_format($totalLocationLabor, 2) }}</th>
+                                    <th class="text-right">₹{{ number_format($totalLocationMaterial, 2) }}</th>
+                                    <th class="text-right">₹{{ number_format($totalLocationLabor + $totalLocationMaterial, 2) }}</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+                @endif
+
                 <!-- Estimate vs Actual Card -->
                 @php
                     $taskEstimated = $task->hasSubtasks() ? ($task->aggregated_quoted_amount ?? 0) : ($task->quoted_amount ?? 0);
@@ -546,8 +599,15 @@
                                 <div class="modal-body">
                                     <div class="alert alert-info">
                                         <i class="fas fa-info-circle mr-1"></i>
-                                        Site: <strong>{{ $task->project->site->name ?? 'No site assigned' }}</strong>
-                                        - Only stock available at this site will be shown.
+                                        Project Locations:
+                                        <strong>
+                                            @if($task->project->sites->count() > 0 || $task->project->factories->count() > 0)
+                                                {{ $task->project->sites->pluck('name')->concat($task->project->factories->pluck('name'))->join(', ') }}
+                                            @else
+                                                No locations assigned
+                                            @endif
+                                        </strong>
+                                        - Stock will be shown based on task location.
                                     </div>
 
                                     <div class="form-group">

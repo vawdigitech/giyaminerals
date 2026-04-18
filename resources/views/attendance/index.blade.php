@@ -87,7 +87,11 @@
         <!-- Filters -->
         <div class="card card-outline card-primary mb-3">
             <div class="card-body">
-                <form method="GET" action="{{ route('attendance.index') }}" class="row g-3">
+                @php
+                    $currentRoute = Route::currentRouteName();
+                    $indexRoute = str_contains($currentRoute, 'factory') ? 'factory-attendance.index' : 'site-attendance.index';
+                @endphp
+                <form method="GET" action="{{ route($indexRoute) }}" class="row g-3">
                     <div class="col-md-2">
                         <input type="date" name="start_date" class="form-control" value="{{ $startDate }}">
                     </div>
@@ -100,6 +104,16 @@
                             @foreach($sites as $site)
                                 <option value="{{ $site->id }}" {{ request('site_id') == $site->id ? 'selected' : '' }}>
                                     {{ $site->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select name="factory_id" class="form-control">
+                            <option value="">All Factories</option>
+                            @foreach($factories as $factory)
+                                <option value="{{ $factory->id }}" {{ request('factory_id') == $factory->id ? 'selected' : '' }}>
+                                    {{ $factory->name }}
                                 </option>
                             @endforeach
                         </select>
@@ -123,8 +137,11 @@
                         </select>
                     </div>
                     <div class="col-md-2">
+                        @php
+                            $exportRoute = str_contains($currentRoute, 'factory') ? 'factory-attendance.export' : 'site-attendance.export';
+                        @endphp
                         <button type="submit" class="btn btn-primary">Filter</button>
-                        <a href="{{ route('attendance.export', request()->all()) }}" class="btn btn-success">
+                        <a href="{{ route($exportRoute, request()->all()) }}" class="btn btn-success">
                             <i class="fas fa-download"></i> Export
                         </a>
                         @can('attendance.export')
@@ -139,12 +156,16 @@
 
         <!-- Quick Links -->
         <div class="mb-3">
+            @php
+                $createRoute = str_contains($currentRoute, 'factory') ? 'factory-attendance.create' : 'site-attendance.create';
+                $dailyRoute = str_contains($currentRoute, 'factory') ? 'factory-attendance.daily' : 'site-attendance.daily';
+            @endphp
             @can('attendance.create')
-            <a href="{{ route('attendance.create') }}" class="btn btn-primary">
+            <a href="{{ route($createRoute) }}" class="btn btn-primary">
                 <i class="fas fa-plus"></i> Create Attendance
             </a>
             @endcan
-            <a href="{{ route('attendance.daily') }}" class="btn btn-outline-primary">
+            <a href="{{ route($dailyRoute) }}" class="btn btn-outline-primary">
                 <i class="fas fa-calendar-day"></i> Today's Attendance
             </a>
             <a href="{{ route('salary.index') }}" class="btn btn-outline-success">
@@ -163,7 +184,7 @@
                         <tr>
                             <th>Date</th>
                             <th>Employee</th>
-                            <th>Site</th>
+                            <th>Location</th>
                             <th>Check In</th>
                             <th>Check Out</th>
                             <th class="text-center">Hours</th>
@@ -185,7 +206,17 @@
                                     </a>
                                     <br><small class="text-muted">{{ $attendance->employee->employee_code ?? '' }}</small>
                                 </td>
-                                <td>{{ $attendance->site->name ?? '-' }}</td>
+                                <td>
+                                    @if($attendance->factory_id)
+                                        <span class="badge badge-primary">Factory</span>
+                                        {{ $attendance->factory->name ?? '-' }}
+                                    @elseif($attendance->site_id)
+                                        <span class="badge badge-info">Site</span>
+                                        {{ $attendance->site->name ?? '-' }}
+                                    @else
+                                        -
+                                    @endif
+                                </td>
                                 <td>{{ $attendance->check_in_time ? \Carbon\Carbon::parse($attendance->check_in_time)->format('h:i A') : '-' }}</td>
                                 <td>{{ $attendance->check_out_time ? \Carbon\Carbon::parse($attendance->check_out_time)->format('h:i A') : '-' }}</td>
                                 <td class="text-center">{{ $attendance->total_hours ? number_format($attendance->total_hours, 2) : '-' }}</td>
@@ -223,16 +254,20 @@
                                 </td>
                                 <td>{{ $attendance->markedBy->name ?? '-' }}</td>
                                 <td class="text-center">
+                                    @php
+                                        $editRoute = str_contains(Route::currentRouteName(), 'factory') ? 'factory-attendance.edit' : 'site-attendance.edit';
+                                        $destroyRoute = str_contains(Route::currentRouteName(), 'factory') ? 'factory-attendance.destroy' : 'site-attendance.destroy';
+                                    @endphp
                                     <button type="button" class="btn btn-sm btn-info" data-toggle="modal" data-target="#detailsModal{{ $attendance->id }}">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                     @can('attendance.edit')
-                                    <a href="{{ route('attendance.edit', $attendance) }}" class="btn btn-sm btn-warning">
+                                    <a href="{{ route($editRoute, $attendance) }}" class="btn btn-sm btn-warning">
                                         <i class="fas fa-edit"></i>
                                     </a>
                                     @endcan
                                     @can('attendance.delete')
-                                    <form action="{{ route('attendance.destroy', $attendance) }}" method="POST" style="display: inline-block;" onsubmit="return confirm('Are you sure you want to delete this attendance record?');">
+                                    <form action="{{ route($destroyRoute, $attendance) }}" method="POST" style="display: inline-block;" onsubmit="return confirm('Are you sure you want to delete this attendance record?');">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="btn btn-sm btn-danger">
@@ -266,18 +301,22 @@
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
-                <form action="{{ route('attendance.import') }}" method="POST" enctype="multipart/form-data">
+                @php
+                    $importRoute = str_contains(Route::currentRouteName(), 'factory') ? 'factory-attendance.import' : 'site-attendance.import';
+                    $templateRoute = str_contains(Route::currentRouteName(), 'factory') ? 'factory-attendance.template' : 'site-attendance.template';
+                @endphp
+                <form action="{{ route($importRoute) }}" method="POST" enctype="multipart/form-data">
                     @csrf
                     <div class="modal-body">
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle mr-1"></i>
                             Upload an Excel (.xlsx, .xls) or CSV file to import old attendance records.
                             <br>
-                            Required columns: <strong>Date, Employee Code, Site Name, Status</strong>
+                            Required columns: <strong>Date, Employee Code, Status</strong> and either <strong>Site Name</strong> or <strong>Factory Name</strong>
                             <br>
                             Optional columns: <strong>Check In, Check Out, Notes</strong>
                             <br><br>
-                            <a href="{{ route('attendance.template') }}" class="btn btn-sm btn-outline-primary">
+                            <a href="{{ route($templateRoute) }}" class="btn btn-sm btn-outline-primary">
                                 <i class="fas fa-download mr-1"></i> Download Sample Template
                             </a>
                         </div>
@@ -295,7 +334,7 @@
                             <ul class="small text-muted mb-0">
                                 <li>Duplicate records (same employee + date) will be skipped automatically.</li>
                                 <li>Employee Code must match exactly as entered in the system.</li>
-                                <li>Site Name is case-insensitive.</li>
+                                <li>Fill EITHER Site Name OR Factory Name, not both. Both are case-insensitive.</li>
                                 <li>Status must be one of: <code>present</code>, <code>late</code>, <code>absent</code></li>
                                 <li>Times should be in <code>HH:MM</code> (24-hour) format, e.g. <code>09:00</code></li>
                             </ul>
@@ -341,8 +380,16 @@
                                         <td>{{ $attendance->employee->name ?? '-' }} ({{ $attendance->employee->employee_code ?? '' }})</td>
                                     </tr>
                                     <tr>
-                                        <th>Site:</th>
-                                        <td>{{ $attendance->site->name ?? '-' }}</td>
+                                        <th>Location:</th>
+                                        <td>
+                                            @if($attendance->factory_id)
+                                                <span class="badge badge-primary">Factory</span> {{ $attendance->factory->name ?? '-' }}
+                                            @elseif($attendance->site_id)
+                                                <span class="badge badge-info">Site</span> {{ $attendance->site->name ?? '-' }}
+                                            @else
+                                                -
+                                            @endif
+                                        </td>
                                     </tr>
                                     <tr>
                                         <th>Check In:</th>

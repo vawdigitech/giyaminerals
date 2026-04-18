@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\ProductCategoryController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\SiteController;
+use App\Http\Controllers\Admin\FactoryController;
 use App\Http\Controllers\Admin\StockController;
 use App\Http\Controllers\Admin\TransferController;
 use App\Http\Controllers\Admin\ReportController;
@@ -83,7 +84,7 @@ Route::middleware('auth')->group(function () {
 
     Route::middleware('permission:inventory.view')->group(function () {
         Route::resource('products', ProductController::class)->only(['index']);
-        Route::resource('categories', ProductCategoryController::class)->only(['index', 'show']);
+        Route::resource('categories', ProductCategoryController::class)->only(['index']);
     });
     Route::middleware('permission:inventory.create')->group(function () {
         Route::resource('products', ProductController::class)->only(['create', 'store']);
@@ -108,6 +109,15 @@ Route::middleware('auth')->group(function () {
     Route::middleware('permission:sites.view')->resource('sites', SiteController::class)->only(['show']);
     Route::middleware('permission:sites.edit')->resource('sites', SiteController::class)->only(['edit', 'update']);
     Route::middleware('permission:sites.delete')->resource('sites', SiteController::class)->only(['destroy']);
+
+    // Factories Management
+    Route::middleware('permission:factories.view')->group(function () {
+        Route::resource('factories', FactoryController::class)->only(['index']);
+    });
+    Route::middleware('permission:factories.create')->resource('factories', FactoryController::class)->only(['create', 'store']);
+    Route::middleware('permission:factories.view')->resource('factories', FactoryController::class)->only(['show']);
+    Route::middleware('permission:factories.edit')->resource('factories', FactoryController::class)->only(['edit', 'update']);
+    Route::middleware('permission:factories.delete')->resource('factories', FactoryController::class)->only(['destroy']);
 
     // Transfers
     Route::middleware('permission:transfers.view')->group(function () {
@@ -142,7 +152,10 @@ Route::middleware('auth')->group(function () {
         Route::resource('projects', ProjectController::class)->only(['create', 'store']);
         Route::get('projects/generate-code', [ProjectController::class, 'generateCode'])->name('projects.generate-code');
     });
-    Route::middleware('permission:projects.view')->resource('projects', ProjectController::class)->only(['index', 'show']);
+    Route::middleware('permission:projects.view')->group(function () {
+        Route::resource('projects', ProjectController::class)->only(['index', 'show']);
+        Route::get('projects/{project}/locations', [ProjectController::class, 'getLocations'])->name('projects.get-locations');
+    });
     Route::middleware('permission:projects.edit')->resource('projects', ProjectController::class)->only(['edit', 'update']);
     Route::middleware('permission:projects.delete')->resource('projects', ProjectController::class)->only(['destroy']);
 
@@ -175,28 +188,55 @@ Route::middleware('auth')->group(function () {
         Route::delete('tasks/{task}/materials/{usage}', [TaskStockUsageController::class, 'destroy'])->name('tasks.materials.destroy');
     });
 
-    // Attendance Reports
+    // Site Attendance Reports
     Route::middleware('permission:attendance.view')->group(function () {
-        Route::get('attendance', [AttendanceReportController::class, 'index'])->name('attendance.index');
-        Route::get('attendance/daily', [AttendanceReportController::class, 'daily'])->name('attendance.daily');
-        Route::get('attendance/employee/{employee}', [AttendanceReportController::class, 'employeeReport'])->name('attendance.employee');
+        Route::get('site-attendance', [AttendanceReportController::class, 'siteIndex'])->name('site-attendance.index');
+        Route::get('site-attendance/daily', [AttendanceReportController::class, 'siteDaily'])->name('site-attendance.daily');
+        Route::get('site-attendance/employee/{employee}', [AttendanceReportController::class, 'employeeReport'])->name('site-attendance.employee');
     });
     Route::middleware('permission:attendance.create')->group(function () {
-        Route::get('attendance/create', [AttendanceReportController::class, 'create'])->name('attendance.create');
-        Route::post('attendance', [AttendanceReportController::class, 'store'])->name('attendance.store');
+        Route::get('site-attendance/create', [AttendanceReportController::class, 'siteCreate'])->name('site-attendance.create');
+        Route::post('site-attendance', [AttendanceReportController::class, 'siteStore'])->name('site-attendance.store');
     });
     Route::middleware('permission:attendance.edit')->group(function () {
-        Route::get('attendance/{attendance}/edit', [AttendanceReportController::class, 'edit'])->name('attendance.edit');
-        Route::put('attendance/{attendance}', [AttendanceReportController::class, 'update'])->name('attendance.update');
+        Route::get('site-attendance/{attendance}/edit', [AttendanceReportController::class, 'siteEdit'])->name('site-attendance.edit');
+        Route::put('site-attendance/{attendance}', [AttendanceReportController::class, 'siteUpdate'])->name('site-attendance.update');
     });
     Route::middleware('permission:attendance.delete')->group(function () {
-        Route::delete('attendance/{attendance}', [AttendanceReportController::class, 'destroy'])->name('attendance.destroy');
+        Route::delete('site-attendance/{attendance}', [AttendanceReportController::class, 'destroy'])->name('site-attendance.destroy');
     });
     Route::middleware('permission:attendance.export')->group(function () {
-        Route::get('attendance/export', [AttendanceReportController::class, 'export'])->name('attendance.export');
-        Route::get('attendance/template', [AttendanceReportController::class, 'downloadTemplate'])->name('attendance.template');
-        Route::post('attendance/import', [AttendanceReportController::class, 'import'])->name('attendance.import');
+        Route::get('site-attendance/export', [AttendanceReportController::class, 'siteExport'])->name('site-attendance.export');
+        Route::get('site-attendance/template', [AttendanceReportController::class, 'downloadTemplate'])->name('site-attendance.template');
+        Route::post('site-attendance/import', [AttendanceReportController::class, 'import'])->name('site-attendance.import');
     });
+
+    // Factory Attendance Reports
+    Route::middleware('permission:attendance.view')->group(function () {
+        Route::get('factory-attendance', [AttendanceReportController::class, 'factoryIndex'])->name('factory-attendance.index');
+        Route::get('factory-attendance/daily', [AttendanceReportController::class, 'factoryDaily'])->name('factory-attendance.daily');
+        Route::get('factory-attendance/employee/{employee}', [AttendanceReportController::class, 'employeeReport'])->name('factory-attendance.employee');
+    });
+    Route::middleware('permission:attendance.create')->group(function () {
+        Route::get('factory-attendance/create', [AttendanceReportController::class, 'factoryCreate'])->name('factory-attendance.create');
+        Route::post('factory-attendance', [AttendanceReportController::class, 'factoryStore'])->name('factory-attendance.store');
+    });
+    Route::middleware('permission:attendance.edit')->group(function () {
+        Route::get('factory-attendance/{attendance}/edit', [AttendanceReportController::class, 'factoryEdit'])->name('factory-attendance.edit');
+        Route::put('factory-attendance/{attendance}', [AttendanceReportController::class, 'factoryUpdate'])->name('factory-attendance.update');
+    });
+    Route::middleware('permission:attendance.delete')->group(function () {
+        Route::delete('factory-attendance/{attendance}', [AttendanceReportController::class, 'destroy'])->name('factory-attendance.destroy');
+    });
+    Route::middleware('permission:attendance.export')->group(function () {
+        Route::get('factory-attendance/export', [AttendanceReportController::class, 'factoryExport'])->name('factory-attendance.export');
+        Route::get('factory-attendance/template', [AttendanceReportController::class, 'downloadTemplate'])->name('factory-attendance.template');
+        Route::post('factory-attendance/import', [AttendanceReportController::class, 'import'])->name('factory-attendance.import');
+    });
+
+    // Legacy Attendance Routes (redirect to site attendance)
+    Route::redirect('/attendance', '/site-attendance');
+    Route::get('attendance/employee/{employee}', [AttendanceReportController::class, 'employeeReport'])->name('attendance.employee');
 
     // Salary Management
     Route::middleware('permission:salary.view')->group(function () {

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Employee;
 use App\Models\Site;
+use App\Models\Factory;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -26,7 +27,7 @@ class AttendanceReportController extends Controller
                 $attendance->saveQuietly(); // Save without triggering events
             });
 
-        $query = Attendance::with(['employee', 'site', 'breaks']);
+        $query = Attendance::with(['employee', 'site', 'factory', 'breaks']);
 
         // Default to current month
         $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->format('Y-m-d'));
@@ -34,9 +35,23 @@ class AttendanceReportController extends Controller
 
         $query->whereBetween('date', [$startDate, $endDate]);
 
+        // Filter by location type (for separate menus)
+        if ($request->filled('location_type')) {
+            if ($request->location_type === 'site') {
+                $query->whereNotNull('site_id')->whereNull('factory_id');
+            } elseif ($request->location_type === 'factory') {
+                $query->whereNotNull('factory_id')->whereNull('site_id');
+            }
+        }
+
         // Filter by site
         if ($request->filled('site_id')) {
             $query->where('site_id', $request->site_id);
+        }
+
+        // Filter by factory
+        if ($request->filled('factory_id')) {
+            $query->where('factory_id', $request->factory_id);
         }
 
         // Filter by employee
@@ -54,6 +69,7 @@ class AttendanceReportController extends Controller
             ->paginate(20);
 
         $sites = Site::orderBy('name')->get();
+        $factories = Factory::orderBy('name')->get();
         $employees = Employee::where('status', 'active')->orderBy('name')->get();
 
         // Calculate summary statistics
@@ -70,7 +86,7 @@ class AttendanceReportController extends Controller
         ];
 
         return view('attendance.index', compact(
-            'attendances', 'sites', 'employees', 'summary',
+            'attendances', 'sites', 'factories', 'employees', 'summary',
             'startDate', 'endDate'
         ));
     }
@@ -79,20 +95,43 @@ class AttendanceReportController extends Controller
     {
         $date = $request->input('date', Carbon::today()->format('Y-m-d'));
         $siteId = $request->input('site_id');
+        $factoryId = $request->input('factory_id');
+        $locationType = $request->input('location_type');
 
-        $query = Attendance::with(['employee', 'site', 'breaks'])
+        $query = Attendance::with(['employee', 'site', 'factory', 'breaks'])
             ->where('date', $date);
+
+        // Filter by location type (for separate menus)
+        if ($locationType) {
+            if ($locationType === 'site') {
+                $query->whereNotNull('site_id')->whereNull('factory_id');
+            } elseif ($locationType === 'factory') {
+                $query->whereNotNull('factory_id')->whereNull('site_id');
+            }
+        }
 
         if ($siteId) {
             $query->where('site_id', $siteId);
+        }
+
+        if ($factoryId) {
+            $query->where('factory_id', $factoryId);
         }
 
         $attendances = $query->orderBy('check_in_time')->get();
 
         // Get all employees and check who's missing
         $employeeQuery = Employee::where('status', 'active');
+        if ($locationType === 'site') {
+            $employeeQuery->whereNotNull('site_id');
+        } elseif ($locationType === 'factory') {
+            $employeeQuery->whereNotNull('factory_id');
+        }
         if ($siteId) {
             $employeeQuery->where('site_id', $siteId);
+        }
+        if ($factoryId) {
+            $employeeQuery->where('factory_id', $factoryId);
         }
         $allEmployees = $employeeQuery->get();
 
@@ -100,6 +139,7 @@ class AttendanceReportController extends Controller
         $absentEmployees = $allEmployees->whereNotIn('id', $presentIds);
 
         $sites = Site::orderBy('name')->get();
+        $factories = Factory::orderBy('name')->get();
 
         // Summary for the day
         $summary = [
@@ -111,7 +151,7 @@ class AttendanceReportController extends Controller
         ];
 
         return view('attendance.daily', compact(
-            'attendances', 'absentEmployees', 'sites', 'summary', 'date'
+            'attendances', 'absentEmployees', 'sites', 'factories', 'summary', 'date'
         ));
     }
 
@@ -158,7 +198,16 @@ class AttendanceReportController extends Controller
     {
         // This would generate a CSV/Excel export
         // For now, return the data as JSON for demonstration
-        $query = Attendance::with(['employee', 'site']);
+        $query = Attendance::with(['employee', 'site', 'factory']);
+
+        // Filter by location type (for separate menus)
+        if ($request->filled('location_type')) {
+            if ($request->location_type === 'site') {
+                $query->whereNotNull('site_id')->whereNull('factory_id');
+            } elseif ($request->location_type === 'factory') {
+                $query->whereNotNull('factory_id')->whereNull('site_id');
+            }
+        }
 
         if ($request->filled('start_date') && $request->filled('end_date')) {
             $query->whereBetween('date', [$request->start_date, $request->end_date]);
@@ -166,6 +215,10 @@ class AttendanceReportController extends Controller
 
         if ($request->filled('site_id')) {
             $query->where('site_id', $request->site_id);
+        }
+
+        if ($request->filled('factory_id')) {
+            $query->where('factory_id', $request->factory_id);
         }
 
         $data = $query->orderBy('date', 'desc')->get();
@@ -182,16 +235,22 @@ class AttendanceReportController extends Controller
 
             // Header row
             fputcsv($file, [
-                'Date', 'Employee Code', 'Employee Name', 'Site',
+                'Date', 'Employee Code', 'Employee Name', 'Location Type', 'Location Name',
                 'Check In', 'Check Out', 'Total Hours', 'OT Hours', 'OT Salary', 'Daily Salary', 'Status'
             ]);
 
             foreach ($data as $attendance) {
+                $locationType = $attendance->factory_id ? 'Factory' : 'Site';
+                $locationName = $attendance->factory_id
+                    ? ($attendance->factory->name ?? '')
+                    : ($attendance->site->name ?? '');
+
                 fputcsv($file, [
                     $attendance->date,
                     $attendance->employee->employee_code ?? '',
                     $attendance->employee->name ?? '',
-                    $attendance->site->name ?? '',
+                    $locationType,
+                    $locationName,
                     $attendance->check_in_time,
                     $attendance->check_out_time,
                     $attendance->total_hours,
@@ -214,7 +273,7 @@ class AttendanceReportController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
 
         // Header row
-        $headers = ['Date', 'Employee Code', 'Site Name', 'Check In', 'Check Out', 'Status', 'Notes'];
+        $headers = ['Date', 'Employee Code', 'Site Name', 'Factory Name', 'Check In', 'Check Out', 'Status', 'Notes'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -224,13 +283,13 @@ class AttendanceReportController extends Controller
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '2c3e50']],
         ];
-        $sheet->getStyle('A1:G1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:H1')->applyFromArray($headerStyle);
 
         // Sample rows
         $samples = [
-            ['2025-12-01', 'EMP001', 'Site Name Here', '09:00', '17:00', 'present', ''],
-            ['2025-12-01', 'EMP002', 'Site Name Here', '09:30', '17:00', 'late', ''],
-            ['2025-12-02', 'EMP001', 'Site Name Here', '', '', 'absent', 'Sick leave'],
+            ['2025-12-01', 'EMP001', 'Site Name Here', '', '09:00', '17:00', 'present', ''],
+            ['2025-12-01', 'EMP002', '', 'Factory Name Here', '09:30', '17:00', 'late', ''],
+            ['2025-12-02', 'EMP001', 'Site Name Here', '', '', '', 'absent', 'Sick leave'],
         ];
         foreach ($samples as $rowIndex => $row) {
             foreach ($row as $col => $value) {
@@ -239,7 +298,7 @@ class AttendanceReportController extends Controller
         }
 
         // Auto-size columns
-        foreach (range('A', 'G') as $col) {
+        foreach (range('A', 'H') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
@@ -252,16 +311,18 @@ class AttendanceReportController extends Controller
         $notesSheet->setCellValue('A4', 'Employee Code');
         $notesSheet->setCellValue('B4', 'Must match an existing employee code in the system');
         $notesSheet->setCellValue('A5', 'Site Name');
-        $notesSheet->setCellValue('B5', 'Must match an existing site name in the system (case-insensitive)');
-        $notesSheet->setCellValue('A6', 'Check In');
-        $notesSheet->setCellValue('B6', 'Format: HH:MM (24h) e.g. 09:00  — leave blank for absent records');
-        $notesSheet->setCellValue('A7', 'Check Out');
-        $notesSheet->setCellValue('B7', 'Format: HH:MM (24h) e.g. 17:00  — leave blank if not checked out');
-        $notesSheet->setCellValue('A8', 'Status');
-        $notesSheet->setCellValue('B8', 'One of: present, late, absent');
-        $notesSheet->setCellValue('A9', 'Notes');
-        $notesSheet->setCellValue('B9', 'Optional notes');
-        $notesSheet->setCellValue('A11', 'Duplicate records (same employee + date) will be skipped.');
+        $notesSheet->setCellValue('B5', 'Must match an existing site name (case-insensitive). Fill EITHER Site Name OR Factory Name, not both.');
+        $notesSheet->setCellValue('A6', 'Factory Name');
+        $notesSheet->setCellValue('B6', 'Must match an existing factory name (case-insensitive). Fill EITHER Site Name OR Factory Name, not both.');
+        $notesSheet->setCellValue('A7', 'Check In');
+        $notesSheet->setCellValue('B7', 'Format: HH:MM (24h) e.g. 09:00  — leave blank for absent records');
+        $notesSheet->setCellValue('A8', 'Check Out');
+        $notesSheet->setCellValue('B8', 'Format: HH:MM (24h) e.g. 17:00  — leave blank if not checked out');
+        $notesSheet->setCellValue('A9', 'Status');
+        $notesSheet->setCellValue('B9', 'One of: present, late, absent');
+        $notesSheet->setCellValue('A10', 'Notes');
+        $notesSheet->setCellValue('B10', 'Optional notes');
+        $notesSheet->setCellValue('A12', 'Duplicate records (same employee + date) will be skipped.');
 
         $spreadsheet->setActiveSheetIndex(0);
 
@@ -307,7 +368,7 @@ class AttendanceReportController extends Controller
         // Parse header row (case-insensitive)
         $headerRow = array_map(fn($h) => strtolower(trim((string) $h)), $rows[0]);
         $colMap = [];
-        $expectedCols = ['date', 'employee code', 'site name', 'check in', 'check out', 'status', 'notes'];
+        $expectedCols = ['date', 'employee code', 'site name', 'factory name', 'check in', 'check out', 'status', 'notes'];
         foreach ($expectedCols as $col) {
             $idx = array_search($col, $headerRow);
             if ($idx !== false) {
@@ -315,20 +376,26 @@ class AttendanceReportController extends Controller
             }
         }
 
-        $requiredCols = ['date', 'employee code', 'site name', 'status'];
+        $requiredCols = ['date', 'employee code', 'status'];
         foreach ($requiredCols as $col) {
             if (!isset($colMap[$col])) {
                 return back()->withErrors(['file' => "Missing required column: \"$col\". Please use the template."]);
             }
         }
 
-        // Cache employee codes and site names to reduce DB queries
+        // At least one of site name or factory name must be present
+        if (!isset($colMap['site name']) && !isset($colMap['factory name'])) {
+            return back()->withErrors(['file' => "Missing required column: either \"Site Name\" or \"Factory Name\" must be present."]);
+        }
+
+        // Cache employee codes, site names, and factory names to reduce DB queries
         $employees = Employee::get()->keyBy('employee_code')->map(fn($e) => [
             'id'            => $e->id,
             'daily_rate'    => $e->daily_rate,
             'working_hours' => $e->working_hours,
         ])->toArray();
         $sites = Site::get()->keyBy(fn($s) => strtolower($s->name))->map(fn($s) => $s->id)->toArray();
+        $factories = Factory::get()->keyBy(fn($f) => strtolower($f->name))->map(fn($f) => $f->id)->toArray();
 
         $imported = 0;
         $skipped = 0;
@@ -341,7 +408,8 @@ class AttendanceReportController extends Controller
 
             $dateRaw       = trim((string) ($row[$colMap['date']] ?? ''));
             $employeeCode  = trim((string) ($row[$colMap['employee code']] ?? ''));
-            $siteName      = trim((string) ($row[$colMap['site name']] ?? ''));
+            $siteName      = isset($colMap['site name']) ? trim((string) ($row[$colMap['site name']] ?? '')) : '';
+            $factoryName   = isset($colMap['factory name']) ? trim((string) ($row[$colMap['factory name']] ?? '')) : '';
             $checkInRaw    = isset($colMap['check in']) ? trim((string) ($row[$colMap['check in']] ?? '')) : '';
             $checkOutRaw   = isset($colMap['check out']) ? trim((string) ($row[$colMap['check out']] ?? '')) : '';
             $statusRaw     = strtolower(trim((string) ($row[$colMap['status']] ?? '')));
@@ -374,12 +442,35 @@ class AttendanceReportController extends Controller
             $dailyRateAtTime  = $employees[$employeeCode]['daily_rate'];
             $workingHoursAtTime = $employees[$employeeCode]['working_hours'];
 
-            // Validate site
-            if (empty($siteName) || !isset($sites[strtolower($siteName)])) {
-                $errors[] = "Row $lineNum: Site \"$siteName\" not found";
+            // Validate site or factory (exactly one must be provided)
+            $siteId = null;
+            $factoryId = null;
+
+            if (empty($siteName) && empty($factoryName)) {
+                $errors[] = "Row $lineNum: Either Site Name or Factory Name must be provided";
                 continue;
             }
-            $siteId = $sites[strtolower($siteName)];
+
+            if (!empty($siteName) && !empty($factoryName)) {
+                $errors[] = "Row $lineNum: Cannot specify both Site and Factory. Choose one.";
+                continue;
+            }
+
+            if (!empty($siteName)) {
+                if (!isset($sites[strtolower($siteName)])) {
+                    $errors[] = "Row $lineNum: Site \"$siteName\" not found";
+                    continue;
+                }
+                $siteId = $sites[strtolower($siteName)];
+            }
+
+            if (!empty($factoryName)) {
+                if (!isset($factories[strtolower($factoryName)])) {
+                    $errors[] = "Row $lineNum: Factory \"$factoryName\" not found";
+                    continue;
+                }
+                $factoryId = $factories[strtolower($factoryName)];
+            }
 
             // Validate status
             if (!in_array($statusRaw, ['present', 'late', 'absent'])) {
@@ -435,6 +526,7 @@ class AttendanceReportController extends Controller
             Attendance::create([
                 'employee_id'          => $employeeId,
                 'site_id'              => $siteId,
+                'factory_id'           => $factoryId,
                 'date'                 => $date,
                 'check_in_time'        => $checkInTime,
                 'check_out_time'       => $checkOutTime,
@@ -467,8 +559,9 @@ class AttendanceReportController extends Controller
     {
         $employees = Employee::where('status', 'active')->orderBy('name')->get();
         $sites = Site::orderBy('name')->get();
+        $factories = Factory::orderBy('name')->get();
 
-        return view('attendance.create', compact('employees', 'sites'));
+        return view('attendance.create', compact('employees', 'sites', 'factories'));
     }
 
     /**
@@ -478,13 +571,27 @@ class AttendanceReportController extends Controller
     {
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
-            'site_id' => 'required|exists:sites,id',
+            'site_id' => 'nullable|exists:sites,id',
+            'factory_id' => 'nullable|exists:factories,id',
             'date' => 'required|date',
             'check_in_time' => 'nullable|date_format:H:i',
             'check_out_time' => 'nullable|date_format:H:i|after:check_in_time',
             'status' => 'required|in:present,late,absent',
             'notes' => 'nullable|string|max:500',
         ]);
+
+        // Validate that exactly one of site_id or factory_id is provided
+        if (empty($validated['site_id']) && empty($validated['factory_id'])) {
+            return back()
+                ->withInput()
+                ->withErrors(['site_id' => 'Either Site or Factory must be selected.']);
+        }
+
+        if (!empty($validated['site_id']) && !empty($validated['factory_id'])) {
+            return back()
+                ->withInput()
+                ->withErrors(['site_id' => 'Cannot select both Site and Factory. Choose one.']);
+        }
 
         // Check for duplicate attendance record
         $exists = Attendance::where('employee_id', $validated['employee_id'])
@@ -510,7 +617,8 @@ class AttendanceReportController extends Controller
 
         Attendance::create([
             'employee_id' => $validated['employee_id'],
-            'site_id' => $validated['site_id'],
+            'site_id' => $validated['site_id'] ?? null,
+            'factory_id' => $validated['factory_id'] ?? null,
             'date' => $validated['date'],
             'check_in_time' => $validated['check_in_time'] ? Carbon::parse($validated['date'] . ' ' . $validated['check_in_time']) : null,
             'check_out_time' => $validated['check_out_time'] ? Carbon::parse($validated['date'] . ' ' . $validated['check_out_time']) : null,
@@ -533,8 +641,9 @@ class AttendanceReportController extends Controller
     {
         $employees = Employee::where('status', 'active')->orderBy('name')->get();
         $sites = Site::orderBy('name')->get();
+        $factories = Factory::orderBy('name')->get();
 
-        return view('attendance.edit', compact('attendance', 'employees', 'sites'));
+        return view('attendance.edit', compact('attendance', 'employees', 'sites', 'factories'));
     }
 
     /**
@@ -544,13 +653,27 @@ class AttendanceReportController extends Controller
     {
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
-            'site_id' => 'required|exists:sites,id',
+            'site_id' => 'nullable|exists:sites,id',
+            'factory_id' => 'nullable|exists:factories,id',
             'date' => 'required|date',
             'check_in_time' => 'nullable|date_format:H:i',
             'check_out_time' => 'nullable|date_format:H:i|after:check_in_time',
             'status' => 'required|in:present,late,absent',
             'notes' => 'nullable|string|max:500',
         ]);
+
+        // Validate that exactly one of site_id or factory_id is provided
+        if (empty($validated['site_id']) && empty($validated['factory_id'])) {
+            return back()
+                ->withInput()
+                ->withErrors(['site_id' => 'Either Site or Factory must be selected.']);
+        }
+
+        if (!empty($validated['site_id']) && !empty($validated['factory_id'])) {
+            return back()
+                ->withInput()
+                ->withErrors(['site_id' => 'Cannot select both Site and Factory. Choose one.']);
+        }
 
         // Check for duplicate (excluding current record)
         $exists = Attendance::where('employee_id', $validated['employee_id'])
@@ -577,7 +700,8 @@ class AttendanceReportController extends Controller
 
         $attendance->update([
             'employee_id' => $validated['employee_id'],
-            'site_id' => $validated['site_id'],
+            'site_id' => $validated['site_id'] ?? null,
+            'factory_id' => $validated['factory_id'] ?? null,
             'date' => $validated['date'],
             'check_in_time' => $validated['check_in_time'] ? Carbon::parse($validated['date'] . ' ' . $validated['check_in_time']) : null,
             'check_out_time' => $validated['check_out_time'] ? Carbon::parse($validated['date'] . ' ' . $validated['check_out_time']) : null,
@@ -660,5 +784,300 @@ class AttendanceReportController extends Controller
 
         return redirect()->route('attendance.index')
             ->with('success', "Attendance record for {$employeeName} on {$date} deleted successfully.");
+    }
+
+    /**
+     * ====================================================================
+     * SITE ATTENDANCE METHODS
+     * ====================================================================
+     */
+
+    public function siteIndex(Request $request)
+    {
+        $request->merge(['location_type' => 'site']);
+        return $this->index($request);
+    }
+
+    public function siteDaily(Request $request)
+    {
+        $request->merge(['location_type' => 'site']);
+        return $this->daily($request);
+    }
+
+    public function siteCreate()
+    {
+        $employees = Employee::where('status', 'active')->orderBy('name')->get();
+        $sites = Site::orderBy('name')->get();
+
+        return view('attendance.site-create', compact('employees', 'sites'));
+    }
+
+    public function siteStore(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'site_id' => 'required|exists:sites,id',
+            'date' => 'required|date',
+            'check_in_time' => 'nullable|date_format:H:i',
+            'check_out_time' => 'nullable|date_format:H:i|after:check_in_time',
+            'status' => 'required|in:present,late,absent',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        // Check for duplicate
+        $exists = Attendance::where('employee_id', $validated['employee_id'])
+            ->where('date', $validated['date'])
+            ->exists();
+
+        if ($exists) {
+            return back()
+                ->withInput()
+                ->withErrors(['date' => 'Attendance record already exists for this employee on this date.']);
+        }
+
+        $employee = Employee::find($validated['employee_id']);
+
+        $totalHours = null;
+        if ($validated['check_in_time'] && $validated['check_out_time']) {
+            $checkIn = Carbon::parse($validated['date'] . ' ' . $validated['check_in_time']);
+            $checkOut = Carbon::parse($validated['date'] . ' ' . $validated['check_out_time']);
+            $totalHours = round($checkIn->diffInMinutes($checkOut) / 60, 2);
+        }
+
+        Attendance::create([
+            'employee_id' => $validated['employee_id'],
+            'site_id' => $validated['site_id'],
+            'factory_id' => null,
+            'date' => $validated['date'],
+            'check_in_time' => $validated['check_in_time'] ? Carbon::parse($validated['date'] . ' ' . $validated['check_in_time']) : null,
+            'check_out_time' => $validated['check_out_time'] ? Carbon::parse($validated['date'] . ' ' . $validated['check_out_time']) : null,
+            'total_hours' => $totalHours,
+            'daily_rate_at_time' => $employee->daily_rate,
+            'working_hours_at_time' => $employee->working_hours,
+            'status' => $validated['status'],
+            'notes' => $validated['notes'],
+            'marked_by' => auth()->id(),
+        ]);
+
+        return redirect()->route('site-attendance.index')
+            ->with('success', 'Site attendance record created successfully.');
+    }
+
+    public function siteEdit(Attendance $attendance)
+    {
+        $employees = Employee::where('status', 'active')->orderBy('name')->get();
+        $sites = Site::orderBy('name')->get();
+
+        return view('attendance.site-edit', compact('attendance', 'employees', 'sites'));
+    }
+
+    public function siteUpdate(Request $request, Attendance $attendance)
+    {
+        $validated = $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'site_id' => 'required|exists:sites,id',
+            'date' => 'required|date',
+            'check_in_time' => 'nullable|date_format:H:i',
+            'check_out_time' => 'nullable|date_format:H:i|after:check_in_time',
+            'status' => 'required|in:present,late,absent',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $exists = Attendance::where('employee_id', $validated['employee_id'])
+            ->where('date', $validated['date'])
+            ->where('id', '!=', $attendance->id)
+            ->exists();
+
+        if ($exists) {
+            return back()
+                ->withInput()
+                ->withErrors(['date' => 'Attendance record already exists for this employee on this date.']);
+        }
+
+        $oldTotalHours = $attendance->total_hours;
+
+        $totalHours = null;
+        if ($validated['check_in_time'] && $validated['check_out_time']) {
+            $checkIn = Carbon::parse($validated['date'] . ' ' . $validated['check_in_time']);
+            $checkOut = Carbon::parse($validated['date'] . ' ' . $validated['check_out_time']);
+            $totalHours = round($checkIn->diffInMinutes($checkOut) / 60, 2);
+        }
+
+        $attendance->update([
+            'employee_id' => $validated['employee_id'],
+            'site_id' => $validated['site_id'],
+            'factory_id' => null,
+            'date' => $validated['date'],
+            'check_in_time' => $validated['check_in_time'] ? Carbon::parse($validated['date'] . ' ' . $validated['check_in_time']) : null,
+            'check_out_time' => $validated['check_out_time'] ? Carbon::parse($validated['date'] . ' ' . $validated['check_out_time']) : null,
+            'total_hours' => $totalHours,
+            'status' => $validated['status'],
+            'notes' => $validated['notes'],
+        ]);
+
+        $attendance->refresh();
+        $newTotalHours = $attendance->total_hours;
+
+        if ($oldTotalHours > 0 && $newTotalHours > 0 && $oldTotalHours != $newTotalHours) {
+            $this->recalculateWorkSessions($attendance, $oldTotalHours, $newTotalHours);
+        } elseif ($newTotalHours > 0 && $attendance->sessions()->exists()) {
+            $this->triggerTaskRecalculation($attendance);
+        }
+
+        return redirect()->route('site-attendance.index')
+            ->with('success', 'Site attendance record updated successfully.');
+    }
+
+    public function siteExport(Request $request)
+    {
+        $request->merge(['location_type' => 'site']);
+        return $this->export($request);
+    }
+
+    /**
+     * ====================================================================
+     * FACTORY ATTENDANCE METHODS
+     * ====================================================================
+     */
+
+    public function factoryIndex(Request $request)
+    {
+        $request->merge(['location_type' => 'factory']);
+        return $this->index($request);
+    }
+
+    public function factoryDaily(Request $request)
+    {
+        $request->merge(['location_type' => 'factory']);
+        return $this->daily($request);
+    }
+
+    public function factoryCreate()
+    {
+        $employees = Employee::where('status', 'active')->orderBy('name')->get();
+        $factories = Factory::orderBy('name')->get();
+
+        return view('attendance.factory-create', compact('employees', 'factories'));
+    }
+
+    public function factoryStore(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'factory_id' => 'required|exists:factories,id',
+            'date' => 'required|date',
+            'check_in_time' => 'nullable|date_format:H:i',
+            'check_out_time' => 'nullable|date_format:H:i|after:check_in_time',
+            'status' => 'required|in:present,late,absent',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $exists = Attendance::where('employee_id', $validated['employee_id'])
+            ->where('date', $validated['date'])
+            ->exists();
+
+        if ($exists) {
+            return back()
+                ->withInput()
+                ->withErrors(['date' => 'Attendance record already exists for this employee on this date.']);
+        }
+
+        $employee = Employee::find($validated['employee_id']);
+
+        $totalHours = null;
+        if ($validated['check_in_time'] && $validated['check_out_time']) {
+            $checkIn = Carbon::parse($validated['date'] . ' ' . $validated['check_in_time']);
+            $checkOut = Carbon::parse($validated['date'] . ' ' . $validated['check_out_time']);
+            $totalHours = round($checkIn->diffInMinutes($checkOut) / 60, 2);
+        }
+
+        Attendance::create([
+            'employee_id' => $validated['employee_id'],
+            'site_id' => null,
+            'factory_id' => $validated['factory_id'],
+            'date' => $validated['date'],
+            'check_in_time' => $validated['check_in_time'] ? Carbon::parse($validated['date'] . ' ' . $validated['check_in_time']) : null,
+            'check_out_time' => $validated['check_out_time'] ? Carbon::parse($validated['date'] . ' ' . $validated['check_out_time']) : null,
+            'total_hours' => $totalHours,
+            'daily_rate_at_time' => $employee->factory_daily_rate ?? $employee->daily_rate,
+            'working_hours_at_time' => $employee->factory_working_hours ?? $employee->working_hours,
+            'status' => $validated['status'],
+            'notes' => $validated['notes'],
+            'marked_by' => auth()->id(),
+        ]);
+
+        return redirect()->route('factory-attendance.index')
+            ->with('success', 'Factory attendance record created successfully.');
+    }
+
+    public function factoryEdit(Attendance $attendance)
+    {
+        $employees = Employee::where('status', 'active')->orderBy('name')->get();
+        $factories = Factory::orderBy('name')->get();
+
+        return view('attendance.factory-edit', compact('attendance', 'employees', 'factories'));
+    }
+
+    public function factoryUpdate(Request $request, Attendance $attendance)
+    {
+        $validated = $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'factory_id' => 'required|exists:factories,id',
+            'date' => 'required|date',
+            'check_in_time' => 'nullable|date_format:H:i',
+            'check_out_time' => 'nullable|date_format:H:i|after:check_in_time',
+            'status' => 'required|in:present,late,absent',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $exists = Attendance::where('employee_id', $validated['employee_id'])
+            ->where('date', $validated['date'])
+            ->where('id', '!=', $attendance->id)
+            ->exists();
+
+        if ($exists) {
+            return back()
+                ->withInput()
+                ->withErrors(['date' => 'Attendance record already exists for this employee on this date.']);
+        }
+
+        $oldTotalHours = $attendance->total_hours;
+
+        $totalHours = null;
+        if ($validated['check_in_time'] && $validated['check_out_time']) {
+            $checkIn = Carbon::parse($validated['date'] . ' ' . $validated['check_in_time']);
+            $checkOut = Carbon::parse($validated['date'] . ' ' . $validated['check_out_time']);
+            $totalHours = round($checkIn->diffInMinutes($checkOut) / 60, 2);
+        }
+
+        $attendance->update([
+            'employee_id' => $validated['employee_id'],
+            'site_id' => null,
+            'factory_id' => $validated['factory_id'],
+            'date' => $validated['date'],
+            'check_in_time' => $validated['check_in_time'] ? Carbon::parse($validated['date'] . ' ' . $validated['check_in_time']) : null,
+            'check_out_time' => $validated['check_out_time'] ? Carbon::parse($validated['date'] . ' ' . $validated['check_out_time']) : null,
+            'total_hours' => $totalHours,
+            'status' => $validated['status'],
+            'notes' => $validated['notes'],
+        ]);
+
+        $attendance->refresh();
+        $newTotalHours = $attendance->total_hours;
+
+        if ($oldTotalHours > 0 && $newTotalHours > 0 && $oldTotalHours != $newTotalHours) {
+            $this->recalculateWorkSessions($attendance, $oldTotalHours, $newTotalHours);
+        } elseif ($newTotalHours > 0 && $attendance->sessions()->exists()) {
+            $this->triggerTaskRecalculation($attendance);
+        }
+
+        return redirect()->route('factory-attendance.index')
+            ->with('success', 'Factory attendance record updated successfully.');
+    }
+
+    public function factoryExport(Request $request)
+    {
+        $request->merge(['location_type' => 'factory']);
+        return $this->export($request);
     }
 }

@@ -26,7 +26,7 @@ return [
         [
             'title' => 'INVENTORY',
             'type' => 'header',
-            'permission' => 'warehouses.view|inventory.view|sites.view|transfers.view',
+            'permission' => 'warehouses.view|inventory.view|sites.view|factories.view|transfers.view',
         ],
         [
             'title' => 'Warehouses',
@@ -55,6 +55,13 @@ return [
             'icon' => 'fas fa-building',
             'active' => 'sites*',
             'permission' => 'sites.view',
+        ],
+        [
+            'title' => 'Factories',
+            'route' => 'factories.index',
+            'icon' => 'fas fa-industry',
+            'active' => 'factories*',
+            'permission' => 'factories.view',
         ],
         [
             'title' => 'Stock Entry',
@@ -127,10 +134,17 @@ return [
             'permission' => 'employees.view',
         ],
         [
-            'title' => 'Attendance',
-            'route' => 'attendance.index',
+            'title' => 'Site Attendance',
+            'route' => 'site-attendance.index',
             'icon' => 'fas fa-user-clock',
-            'active' => 'attendance*',
+            'active' => 'site-attendance*',
+            'permission' => 'attendance.view',
+        ],
+        [
+            'title' => 'Factory Attendance',
+            'route' => 'factory-attendance.index',
+            'icon' => 'fas fa-industry',
+            'active' => 'factory-attendance*',
             'permission' => 'attendance.view',
         ],
         [

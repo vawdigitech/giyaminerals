@@ -8,6 +8,8 @@ class TaskStockUsage extends Model
 {
     protected $fillable = [
         'task_id',
+        'location_type',
+        'location_id',
         'product_id',
         'stock_id',
         'quantity',

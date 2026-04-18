@@ -84,8 +84,19 @@
                             <dt class="col-5">Name:</dt>
                             <dd class="col-7">{{ $project->name }}</dd>
 
-                            <dt class="col-5">Site:</dt>
-                            <dd class="col-7">{{ $project->site->name ?? '-' }}</dd>
+                            <dt class="col-5">Locations:</dt>
+                            <dd class="col-7">
+                                @if($project->sites->count() > 0 || $project->factories->count() > 0)
+                                    @foreach($project->sites as $site)
+                                        <span class="badge badge-info">{{ $site->name }} (Site)</span>
+                                    @endforeach
+                                    @foreach($project->factories as $factory)
+                                        <span class="badge badge-secondary">{{ $factory->name }} (Factory)</span>
+                                    @endforeach
+                                @else
+                                    <span class="text-muted">No locations assigned</span>
+                                @endif
+                            </dd>
 
                             <dt class="col-5">Status:</dt>
                             <dd class="col-7">

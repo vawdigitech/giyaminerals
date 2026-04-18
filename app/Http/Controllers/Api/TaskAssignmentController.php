@@ -20,7 +20,7 @@ class TaskAssignmentController extends Controller
 
     public function index(Request $request)
     {
-        $query = TaskAssignment::with(['task.project', 'employee']);
+        $query = TaskAssignment::with(['task.project', 'task.factory', 'employee']);
 
         // Filter by task
         if ($request->has('task_id')) {
@@ -51,6 +51,8 @@ class TaskAssignmentController extends Controller
             'task_id' => 'required|exists:tasks,id',
             'employee_ids' => 'required|array|min:1',
             'employee_ids.*' => 'exists:employees,id',
+            'location_type' => 'nullable|in:site,factory',
+            'location_id' => 'nullable|integer',
             'notes' => 'nullable|string',
         ]);
 
@@ -83,12 +85,36 @@ class TaskAssignmentController extends Controller
 
             $employee = Employee::findOrFail($employeeId);
 
+            // Determine location from request or task's first location
+            $location_type = $validated['location_type'] ?? null;
+            $location_id = $validated['location_id'] ?? null;
+
+            // If no location specified, use first location from task
+            if (!$location_type && $task->taskLocations->count() > 0) {
+                $firstLocation = $task->taskLocations->first();
+                $location_type = $firstLocation->location_type;
+                $location_id = $firstLocation->location_id;
+            }
+
+            // Get today's attendance to determine appropriate rate
+            $todayAttendance = $employee->todayAttendance()->first();
+
+            // If no attendance today, create a mock attendance based on assignment location
+            // to ensure we get the correct rate (factory vs site)
+            if (!$todayAttendance) {
+                $todayAttendance = new \stdClass();
+                $todayAttendance->factory_id = $location_type === 'factory' ? $location_id : null;
+                $todayAttendance->site_id = $location_type === 'site' ? $location_id : null;
+            }
+
             $assignment = TaskAssignment::create([
                 'task_id' => $task->id,
+                'location_type' => $location_type,
+                'location_id' => $location_id,
                 'employee_id' => $employeeId,
                 'assigned_by' => $user->id,
                 'assigned_at' => now(),
-                'hourly_rate_at_time' => $employee->hourly_rate,
+                'hourly_rate_at_time' => $employee->getHourlyRateForAttendance($todayAttendance),
                 'notes' => $validated['notes'] ?? null,
             ]);
 

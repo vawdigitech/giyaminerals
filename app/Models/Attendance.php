@@ -12,6 +12,8 @@ class Attendance extends Model
     protected $fillable = [
         'employee_id',
         'site_id',
+        'factory_id',
+        'project_id',
         'date',
         'check_in_time',
         'check_out_time',
@@ -170,9 +172,67 @@ class Attendance extends Model
         return $this->belongsTo(Site::class);
     }
 
+    public function factory()
+    {
+        return $this->belongsTo(Factory::class);
+    }
+
+    public function project()
+    {
+        return $this->belongsTo(Project::class);
+    }
+
     public function markedBy()
     {
         return $this->belongsTo(User::class, 'marked_by');
+    }
+
+    /**
+     * Get the location name (factory or site)
+     */
+    public function getLocationName()
+    {
+        if ($this->factory_id) {
+            return $this->factory ? $this->factory->name : 'Unknown Factory';
+        }
+
+        if ($this->site_id) {
+            return $this->site ? $this->site->name : 'Unknown Site';
+        }
+
+        return 'No Location';
+    }
+
+    /**
+     * Get the location type
+     */
+    public function getLocationType()
+    {
+        if ($this->factory_id) {
+            return 'factory';
+        }
+
+        if ($this->site_id) {
+            return 'site';
+        }
+
+        return null;
+    }
+
+    /**
+     * Check if attendance is at a factory
+     */
+    public function isFactoryAttendance()
+    {
+        return !is_null($this->factory_id);
+    }
+
+    /**
+     * Check if attendance is at a site
+     */
+    public function isSiteAttendance()
+    {
+        return !is_null($this->site_id);
     }
 
     public function sessions()

@@ -62,21 +62,59 @@
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        <label for="site_id">Site <span class="text-danger">*</span></label>
-                                        <select class="form-control @error('site_id') is-invalid @enderror"
-                                            id="site_id" name="site_id" required>
-                                            <option value="">-- Select Site --</option>
-                                            @foreach($sites as $site)
-                                                <option value="{{ $site->id }}" {{ old('site_id') == $site->id ? 'selected' : '' }}>
-                                                    {{ $site->name }}
-                                                </option>
-                                            @endforeach
-                                        </select>
-                                        @error('site_id')
-                                            <span class="invalid-feedback">{{ $message }}</span>
+                                        <label>Work Locations - Sites</label>
+                                        <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                                            @forelse($sites as $site)
+                                                <div class="custom-control custom-checkbox">
+                                                    <input type="checkbox" class="custom-control-input"
+                                                        id="site_{{ $site->id }}"
+                                                        name="site_ids[]"
+                                                        value="{{ $site->id }}"
+                                                        {{ (is_array(old('site_ids')) && in_array($site->id, old('site_ids'))) ? 'checked' : '' }}>
+                                                    <label class="custom-control-label" for="site_{{ $site->id }}">
+                                                        {{ $site->name }}
+                                                    </label>
+                                                </div>
+                                            @empty
+                                                <p class="text-muted">No sites available</p>
+                                            @endforelse
+                                        </div>
+                                        @error('site_ids')
+                                            <span class="invalid-feedback d-block">{{ $message }}</span>
+                                        @enderror
+                                        @error('location')
+                                            <span class="invalid-feedback d-block">{{ $message }}</span>
                                         @enderror
                                     </div>
                                 </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Work Locations - Factories</label>
+                                        <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                                            @forelse($factories as $factory)
+                                                <div class="custom-control custom-checkbox">
+                                                    <input type="checkbox" class="custom-control-input"
+                                                        id="factory_{{ $factory->id }}"
+                                                        name="factory_ids[]"
+                                                        value="{{ $factory->id }}"
+                                                        {{ (is_array(old('factory_ids')) && in_array($factory->id, old('factory_ids'))) ? 'checked' : '' }}>
+                                                    <label class="custom-control-label" for="factory_{{ $factory->id }}">
+                                                        {{ $factory->name }}
+                                                    </label>
+                                                </div>
+                                            @empty
+                                                <p class="text-muted">No factories available</p>
+                                            @endforelse
+                                        </div>
+                                        @error('factory_ids')
+                                            <span class="invalid-feedback d-block">{{ $message }}</span>
+                                        @enderror
+                                        <small class="form-text text-muted">Select one or more sites and/or factories where work will be done</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label for="quoted_amount">Quoted Amount (₹) <span class="text-danger">*</span></label>

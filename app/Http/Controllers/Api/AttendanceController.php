@@ -23,7 +23,7 @@ class AttendanceController extends Controller
     {
         $user = $request->user();
 
-        $query = Attendance::with(['employee', 'site']);
+        $query = Attendance::with(['employee', 'site', 'factory']);
 
         // Supervisors only see attendance at their site
         if ($user->isSupervisor() && $user->site_id) {
@@ -41,6 +41,11 @@ class AttendanceController extends Controller
         // Filter by site
         if ($request->has('site_id')) {
             $query->where('site_id', $request->site_id);
+        }
+
+        // Filter by factory
+        if ($request->has('factory_id')) {
+            $query->where('factory_id', $request->factory_id);
         }
 
         // Filter by employee
@@ -65,6 +70,7 @@ class AttendanceController extends Controller
     {
         $user = $request->user();
         $siteId = $user->isSupervisor() ? $user->site_id : $request->site_id;
+        $factoryId = $request->factory_id;
 
         $query = Employee::where('status', 'active');
 
@@ -72,17 +78,24 @@ class AttendanceController extends Controller
             $query->where('site_id', $siteId);
         }
 
+        if ($factoryId) {
+            $query->where('factory_id', $factoryId);
+        }
+
         $totalEmployees = $query->count();
 
-        $presentToday = Attendance::whereDate('date', today())
-            ->when($siteId, fn($q) => $q->where('site_id', $siteId))
-            ->whereNotNull('check_in_time')
-            ->count();
+        $attendanceQuery = Attendance::whereDate('date', today());
 
-        $checkedOut = Attendance::whereDate('date', today())
-            ->when($siteId, fn($q) => $q->where('site_id', $siteId))
-            ->whereNotNull('check_out_time')
-            ->count();
+        if ($siteId) {
+            $attendanceQuery->where('site_id', $siteId);
+        }
+
+        if ($factoryId) {
+            $attendanceQuery->where('factory_id', $factoryId);
+        }
+
+        $presentToday = (clone $attendanceQuery)->whereNotNull('check_in_time')->count();
+        $checkedOut = (clone $attendanceQuery)->whereNotNull('check_out_time')->count();
 
         return response()->json([
             'success' => true,
@@ -100,10 +113,28 @@ class AttendanceController extends Controller
     {
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
-            'site_id' => 'required|exists:sites,id',
+            'site_id' => 'nullable|exists:sites,id',
+            'factory_id' => 'nullable|exists:factories,id',
+            'project_id' => 'nullable|exists:projects,id',
             'photo' => 'nullable|string',
             'location' => 'nullable|string', // "lat,lng"
         ]);
+
+        // Ensure either site_id or factory_id is provided
+        if (empty($validated['site_id']) && empty($validated['factory_id'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Either site_id or factory_id must be provided',
+            ], 422);
+        }
+
+        // Ensure only one is provided
+        if (!empty($validated['site_id']) && !empty($validated['factory_id'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot check in to both site and factory simultaneously',
+            ], 422);
+        }
 
         $user = $request->user();
 
@@ -113,15 +144,65 @@ class AttendanceController extends Controller
             ->first();
 
         if ($existing) {
+            // Check if trying to check in at a different location
+            $isDifferentLocation = false;
+
+            if (!empty($validated['site_id']) && $existing->site_id != $validated['site_id']) {
+                $isDifferentLocation = true;
+            } elseif (!empty($validated['factory_id']) && $existing->factory_id != $validated['factory_id']) {
+                $isDifferentLocation = true;
+            }
+
+            if ($isDifferentLocation) {
+                // Transfer to new location
+                \Log::info("Transferring employee to new location", [
+                    'employee_id' => $validated['employee_id'],
+                    'old_site_id' => $existing->site_id,
+                    'old_factory_id' => $existing->factory_id,
+                    'new_site_id' => $validated['site_id'] ?? null,
+                    'new_factory_id' => $validated['factory_id'] ?? null,
+                ]);
+
+                // End current work sessions at old location
+                $this->workSessionService->endAllActiveSessions($existing);
+
+                // Update attendance to new location
+                $existing->update([
+                    'site_id' => $validated['site_id'] ?? null,
+                    'factory_id' => $validated['factory_id'] ?? null,
+                    'project_id' => $validated['project_id'] ?? null,
+                ]);
+
+                // Start new work sessions for assignments at new location
+                $sessionData = $this->workSessionService->handleCheckIn($existing);
+
+                $existing->load('employee', 'site', 'factory');
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Transferred to new location successfully',
+                    'data' => $existing,
+                    'sessions_started' => $sessionData['sessions_started'],
+                    'active_tasks' => $sessionData['active_tasks'],
+                    'transferred' => true,
+                ], 200);
+            }
+
+            // Same location - return existing attendance
+            $existing->load('employee', 'site', 'factory');
             return response()->json([
-                'success' => false,
-                'message' => 'Employee already checked in today',
-            ], 422);
+                'success' => true,
+                'message' => 'Employee already checked in at this location today',
+                'data' => $existing,
+            ], 200);
         }
 
+        // New check-in
         $attendance = Attendance::create([
             'employee_id' => $validated['employee_id'],
-            'site_id' => $validated['site_id'],
+            'site_id' => $validated['site_id'] ?? null,
+            'factory_id' => $validated['factory_id'] ?? null,
+            'project_id' => $validated['project_id'] ?? null,
             'date' => today(),
             'check_in_time' => now(),
             'check_in_photo' => $validated['photo'] ?? null,
@@ -133,7 +214,15 @@ class AttendanceController extends Controller
         // Start work sessions for all active task assignments
         $sessionData = $this->workSessionService->handleCheckIn($attendance);
 
-        $attendance->load('employee', 'site');
+        // Get ALL available task assignments for this employee (for task selection)
+        $availableAssignments = $this->workSessionService->getAvailableTaskAssignments(
+            $attendance->employee_id,
+            $attendance->site_id,
+            $attendance->factory_id,
+            $attendance->project_id
+        );
+
+        $attendance->load('employee', 'site', 'factory');
 
         return response()->json([
             'success' => true,
@@ -141,6 +230,7 @@ class AttendanceController extends Controller
             'data' => $attendance,
             'sessions_started' => $sessionData['sessions_started'],
             'active_tasks' => $sessionData['active_tasks'],
+            'available_tasks' => $availableAssignments,
         ], 201);
     }
 
@@ -164,15 +254,16 @@ class AttendanceController extends Controller
         // Capture employee rate snapshots at checkout time
         $employee = $attendance->employee;
 
+        // Use appropriate rates based on attendance location (factory vs site)
         $attendance->update([
             'check_out_time' => now(),
             'check_out_photo' => $validated['photo'] ?? null,
             'check_out_location' => $validated['location'] ?? null,
-            'daily_rate_at_time' => $employee->daily_rate,
-            'working_hours_at_time' => $employee->working_hours,
+            'daily_rate_at_time' => $employee->getDailyRateForAttendance($attendance),
+            'working_hours_at_time' => $employee->getWorkingHoursForAttendance($attendance),
         ]);
 
-        $attendance->load('employee', 'site', 'breaks');
+        $attendance->load('employee', 'site', 'factory', 'breaks');
 
         return response()->json([
             'success' => true,
@@ -289,6 +380,34 @@ class AttendanceController extends Controller
                     'total_hours' => round($totalHours, 2),
                 ],
             ],
+        ]);
+    }
+
+    public function switchActiveTask(Request $request)
+    {
+        $validated = $request->validate([
+            'attendance_id' => 'required|exists:attendances,id',
+            'task_assignment_id' => 'required|exists:task_assignments,id',
+        ]);
+
+        $attendance = Attendance::findOrFail($validated['attendance_id']);
+        $taskAssignment = \App\Models\TaskAssignment::findOrFail($validated['task_assignment_id']);
+
+        // Verify the task assignment belongs to the same employee
+        if ($taskAssignment->employee_id !== $attendance->employee_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Task assignment does not belong to this employee',
+            ], 422);
+        }
+
+        // Switch to the new task (stops all other sessions and starts this one)
+        $result = $this->workSessionService->switchActiveTask($attendance, $taskAssignment);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task switched successfully',
+            'data' => $result,
         ]);
     }
 }

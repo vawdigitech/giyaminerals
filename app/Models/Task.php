@@ -8,6 +8,8 @@ class Task extends Model
 {
     protected $fillable = [
         'project_id',
+        'site_id',
+        'factory_id',
         'parent_id',
         'code',
         'name',
@@ -50,14 +52,154 @@ class Task extends Model
         return $this->belongsTo(Project::class);
     }
 
+    public function site()
+    {
+        return $this->belongsTo(Site::class);
+    }
+
+    public function factory()
+    {
+        return $this->belongsTo(Factory::class);
+    }
+
+    /**
+     * Get all task locations (sites and factories where this task is assigned)
+     */
+    public function taskLocations()
+    {
+        return $this->hasMany(TaskLocation::class);
+    }
+
+    /**
+     * Get all locations for this task
+     */
+    public function getLocations()
+    {
+        $locations = [];
+
+        foreach ($this->taskLocations as $taskLocation) {
+            $location = $taskLocation->getLocation();
+            if ($location) {
+                $locations[] = [
+                    'type' => $taskLocation->location_type,
+                    'id' => $taskLocation->location_id,
+                    'name' => $location->name,
+                    'progress' => $taskLocation->progress,
+                    'status' => $taskLocation->status,
+                    'labor_cost' => $taskLocation->labor_cost,
+                    'material_cost' => $taskLocation->material_cost,
+                    'total_cost' => $taskLocation->total_cost,
+                    'model' => $location,
+                ];
+            }
+        }
+
+        return collect($locations);
+    }
+
+    /**
+     * Get task location for a specific location
+     */
+    public function getTaskLocationFor($locationType, $locationId)
+    {
+        return $this->taskLocations()
+            ->where('location_type', $locationType)
+            ->where('location_id', $locationId)
+            ->first();
+    }
+
+    /**
+     * Check if task is assigned to a specific location
+     */
+    public function isAtLocation($locationType, $locationId)
+    {
+        return $this->taskLocations()
+            ->where('location_type', $locationType)
+            ->where('location_id', $locationId)
+            ->exists();
+    }
+
+    /**
+     * Get aggregated costs from all locations
+     */
+    public function getAggregatedCosts()
+    {
+        $laborCost = $this->taskLocations()->sum('labor_cost');
+        $materialCost = $this->taskLocations()->sum('material_cost');
+        $totalCost = $laborCost + $materialCost;
+
+        return [
+            'labor_cost' => $laborCost,
+            'material_cost' => $materialCost,
+            'total_cost' => $totalCost,
+        ];
+    }
+
+    /**
+     * Get average progress from all locations
+     */
+    public function getAggregatedProgress()
+    {
+        $locationCount = $this->taskLocations()->count();
+        if ($locationCount === 0) {
+            return 0;
+        }
+
+        return (int) round($this->taskLocations()->avg('progress'));
+    }
+
+    /**
+     * Get the location type (site or factory) - backward compatibility
+     */
+    public function getLocationType()
+    {
+        if ($this->site_id) {
+            return 'site';
+        } elseif ($this->factory_id) {
+            return 'factory';
+        }
+        return null;
+    }
+
+    /**
+     * Get the location name - backward compatibility
+     */
+    public function getLocationName()
+    {
+        if ($this->site_id && $this->site) {
+            return $this->site->name;
+        } elseif ($this->factory_id && $this->factory) {
+            return $this->factory->name;
+        }
+        return 'No Location';
+    }
+
     public function parent()
     {
         return $this->belongsTo(Task::class, 'parent_id');
     }
 
+    /**
+     * Scope to filter project tasks
+     */
+    public function scopeProject($query, $projectId = null)
+    {
+        return $projectId
+            ? $query->where('project_id', $projectId)
+            : $query->whereNotNull('project_id');
+    }
+
     public function subtasks()
     {
         return $this->hasMany(Task::class, 'parent_id');
+    }
+
+    /**
+     * Recursive relationship to load all nested subtasks
+     */
+    public function allSubtasks()
+    {
+        return $this->subtasks()->with('allSubtasks');
     }
 
     public function assignments()
@@ -120,6 +262,11 @@ class Task extends Model
 
         $this->save();
 
+        // Recalculate location-specific costs
+        foreach ($this->taskLocations as $taskLocation) {
+            $taskLocation->recalculateCosts();
+        }
+
         // Update this task's own aggregated costs (for leaf tasks, aggregated = direct)
         $this->recalculateAggregatedCosts();
 
@@ -172,7 +319,7 @@ class Task extends Model
 
     /**
      * Recalculate aggregated costs from all subtasks
-     * Only applicable for master tasks (tasks with subtasks)
+     * Propagates changes up to parent tasks
      */
     public function recalculateAggregatedCosts()
     {
@@ -192,32 +339,39 @@ class Task extends Model
             ]);
 
             $this->save();
-            return;
+            // Don't return early - need to propagate to parent
+        } else {
+            // Sum from all subtasks - use fresh query to avoid cached relationship data
+            $subtasks = $this->subtasks()->get();
+
+            // Only sum aggregated values (which already include direct values for leaf tasks)
+            $this->aggregated_labor_cost = $subtasks->sum('aggregated_labor_cost') ?? 0;
+            $this->aggregated_material_cost = $subtasks->sum('aggregated_material_cost') ?? 0;
+            $this->aggregated_actual_amount = $this->aggregated_labor_cost + $this->aggregated_material_cost;
+            $this->aggregated_quoted_amount = $subtasks->sum('aggregated_quoted_amount') ?? 0;
+            $this->total_hours_worked = $subtasks->sum('total_hours_worked') ?? 0;
+
+            \Log::info("Parent task aggregated costs updated", [
+                'task_id' => $this->id,
+                'task_code' => $this->code,
+                'subtasks_count' => $subtasks->count(),
+                'aggregated_labor_cost' => $this->aggregated_labor_cost,
+                'aggregated_material_cost' => $this->aggregated_material_cost,
+                'parent_id' => $this->parent_id
+            ]);
+
+            $this->save();
         }
 
-        // Sum from all subtasks - use fresh query to avoid cached relationship data
-        $subtasks = $this->subtasks()->get();
-
-        // Only sum aggregated values (which already include direct values for leaf tasks)
-        $this->aggregated_labor_cost = $subtasks->sum('aggregated_labor_cost') ?? 0;
-        $this->aggregated_material_cost = $subtasks->sum('aggregated_material_cost') ?? 0;
-        $this->aggregated_actual_amount = $this->aggregated_labor_cost + $this->aggregated_material_cost;
-        $this->aggregated_quoted_amount = $subtasks->sum('aggregated_quoted_amount') ?? 0;
-        $this->total_hours_worked = $subtasks->sum('total_hours_worked') ?? 0;
-
-        \Log::info("Parent task aggregated costs updated", [
-            'task_id' => $this->id,
-            'task_code' => $this->code,
-            'subtasks_count' => $subtasks->count(),
-            'aggregated_labor_cost' => $this->aggregated_labor_cost,
-            'aggregated_material_cost' => $this->aggregated_material_cost,
-            'parent_id' => $this->parent_id
-        ]);
-
-        $this->save();
-
-        // Propagate up to parent if exists
+        // Propagate up to parent if exists (works for both leaf and parent tasks)
         if ($this->parent_id) {
+            \Log::info("Propagating costs to parent", [
+                'child_task_id' => $this->id,
+                'child_task_code' => $this->code,
+                'parent_task_id' => $this->parent_id,
+                'child_aggregated_labor_cost' => $this->aggregated_labor_cost,
+            ]);
+
             $this->parent->refresh(); // Ensure parent has latest data
             $this->parent->recalculateAggregatedCosts();
         }
@@ -302,6 +456,117 @@ class Task extends Model
             ->groupBy(function ($photo) {
                 return $photo->captured_date->format('Y-m-d');
             });
+    }
+
+    /**
+     * Check if a given task ID would create a circular reference if set as parent
+     *
+     * @param int $potentialParentId The ID of the task to be set as parent
+     * @return bool True if it would create a circular reference, false otherwise
+     */
+    public function wouldCreateCircularReference($potentialParentId)
+    {
+        // Can't be your own parent
+        if ($this->id == $potentialParentId) {
+            return true;
+        }
+
+        // Check if the potential parent is a descendant of this task
+        return $this->isAncestorOf($potentialParentId);
+    }
+
+    /**
+     * Check if this task is an ancestor of another task
+     *
+     * @param int $taskId The ID of the task to check
+     * @return bool True if this task is an ancestor of the given task
+     */
+    public function isAncestorOf($taskId)
+    {
+        $task = static::find($taskId);
+
+        if (!$task) {
+            return false;
+        }
+
+        // Traverse up the parent chain of the given task
+        $currentParentId = $task->parent_id;
+        $visited = []; // Prevent infinite loops in case of data corruption
+
+        while ($currentParentId !== null) {
+            // If we find this task in the parent chain, we are an ancestor
+            if ($currentParentId == $this->id) {
+                return true;
+            }
+
+            // Prevent infinite loops
+            if (in_array($currentParentId, $visited)) {
+                break;
+            }
+            $visited[] = $currentParentId;
+
+            // Move up the chain
+            $parent = static::find($currentParentId);
+            $currentParentId = $parent ? $parent->parent_id : null;
+        }
+
+        return false;
+    }
+
+    /**
+     * Get all ancestor tasks (parent, grandparent, etc.)
+     *
+     * @return \Illuminate\Support\Collection
+     */
+    public function getAncestors()
+    {
+        $ancestors = collect();
+        $currentParentId = $this->parent_id;
+        $visited = [];
+
+        while ($currentParentId !== null) {
+            // Prevent infinite loops
+            if (in_array($currentParentId, $visited)) {
+                break;
+            }
+            $visited[] = $currentParentId;
+
+            $parent = static::find($currentParentId);
+            if ($parent) {
+                $ancestors->push($parent);
+                $currentParentId = $parent->parent_id;
+            } else {
+                break;
+            }
+        }
+
+        return $ancestors;
+    }
+
+    /**
+     * Get the nesting level of this task (0 for master tasks, 1 for direct subtasks, etc.)
+     *
+     * @return int
+     */
+    public function getNestingLevel()
+    {
+        return $this->getAncestors()->count();
+    }
+
+    /**
+     * Count all nested subtasks recursively
+     *
+     * @return int
+     */
+    public function countAllSubtasks()
+    {
+        $count = $this->subtasks()->count();
+
+        foreach ($this->subtasks as $subtask) {
+            $count += $subtask->countAllSubtasks();
+        }
+
+        return $count;
     }
 
     /**

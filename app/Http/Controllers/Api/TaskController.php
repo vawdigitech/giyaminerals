@@ -13,18 +13,26 @@ class TaskController extends Controller
     {
         $user = $request->user();
 
-        $query = Task::with(['project.site', 'parent', 'activeAssignments.employee']);
+        $query = Task::with(['project', 'site', 'factory', 'parent', 'activeAssignments.employee']);
 
         // Supervisors only see tasks at their site
         if ($user->isSupervisor() && $user->site_id) {
-            $query->whereHas('project', function ($q) use ($user) {
-                $q->where('site_id', $user->site_id);
-            });
+            $query->where('site_id', $user->site_id);
         }
 
         // Filter by project
         if ($request->has('project_id')) {
             $query->where('project_id', $request->project_id);
+        }
+
+        // Filter by work location (site or factory)
+        // Mobile app should send site_id OR factory_id to see only tasks at that location
+        if ($request->has('site_id')) {
+            $query->where('site_id', $request->site_id);
+        }
+
+        if ($request->has('factory_id')) {
+            $query->where('factory_id', $request->factory_id);
         }
 
         // Filter by status
@@ -68,7 +76,10 @@ class TaskController extends Controller
     public function show(Task $task)
     {
         $task->load([
-            'project.site',
+            'project.sites',
+            'project.factories',
+            'site',
+            'factory',
             'parent',
             'subtasks.activeAssignments.employee',
             'activeAssignments.employee',
@@ -153,11 +164,20 @@ class TaskController extends Controller
 
     public function byProject(Project $project)
     {
+        // Return all tasks (both master and sub-tasks) for parent selection
         $tasks = $project->tasks()
-            ->whereNull('parent_id')
             ->with(['subtasks.activeAssignments.employee', 'activeAssignments.employee'])
             ->orderBy('code')
             ->get();
+
+        // Add display information to show hierarchy
+        $tasks->each(function($task) {
+            $level = $task->getNestingLevel();
+            $indent = str_repeat('  ', $level); // 2 spaces per level
+            $prefix = $level > 0 ? '└─ ' : '';
+            $task->display_name = $indent . $prefix . $task->code . ' - ' . $task->name;
+            $task->nesting_level = $level;
+        });
 
         return response()->json([
             'success' => true,
@@ -220,6 +240,19 @@ class TaskController extends Controller
             ], 422);
         }
 
+        // Validate parent_id to prevent circular references
+        if (isset($validated['parent_id']) && $validated['parent_id']) {
+            $parentTask = Task::find($validated['parent_id']);
+
+            // Check parent is from same project
+            if ($parentTask && $parentTask->project_id != $validated['project_id']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Parent task must be from the same project',
+                ], 422);
+            }
+        }
+
         $task = Task::create($validated);
 
         // Initialize aggregated values for the newly created task
@@ -235,7 +268,7 @@ class TaskController extends Controller
         $task->project->updateProgressFromTasks();
         $task->project->updateStatusFromTasks();
 
-        $task->load(['project.site', 'parent', 'activeAssignments.employee']);
+        $task->load(['project.sites', 'project.factories', 'parent', 'activeAssignments.employee']);
 
         return response()->json([
             'success' => true,
@@ -246,15 +279,46 @@ class TaskController extends Controller
 
     public function getParentTasks(Request $request)
     {
-        $query = Task::whereNull('parent_id')
-            ->with(['project']);
+        // Return all tasks (both master and sub-tasks) for parent selection
+        $query = Task::with(['project']);
 
         // Filter by project if provided
         if ($request->has('project_id')) {
             $query->where('project_id', $request->project_id);
         }
 
+        // Exclude specific task if provided (for edit scenarios)
+        if ($request->has('exclude_task_id')) {
+            $excludeId = $request->exclude_task_id;
+            $query->where('id', '!=', $excludeId);
+
+            // Also exclude descendants to prevent circular references
+            $excludeTask = Task::find($excludeId);
+            if ($excludeTask) {
+                $query->where(function($q) use ($excludeTask) {
+                    // Filter out descendants
+                    $allTasks = Task::where('project_id', $excludeTask->project_id)->get();
+                    $descendantIds = $allTasks->filter(function($task) use ($excludeTask) {
+                        return $excludeTask->isAncestorOf($task->id);
+                    })->pluck('id')->toArray();
+
+                    if (!empty($descendantIds)) {
+                        $q->whereNotIn('id', $descendantIds);
+                    }
+                });
+            }
+        }
+
         $tasks = $query->orderBy('code')->get();
+
+        // Add display information to show hierarchy
+        $tasks->each(function($task) {
+            $level = $task->getNestingLevel();
+            $indent = str_repeat('  ', $level); // 2 spaces per level
+            $prefix = $level > 0 ? '└─ ' : '';
+            $task->display_name = $indent . $prefix . $task->code . ' - ' . $task->name;
+            $task->nesting_level = $level;
+        });
 
         return response()->json([
             'success' => true,

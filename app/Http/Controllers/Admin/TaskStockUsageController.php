@@ -19,19 +19,17 @@ class TaskStockUsageController extends Controller
      */
     public function availableStock(Task $task)
     {
-        $project = $task->project;
-
-        if (!$project || !$project->site_id) {
+        if (!$task->site_id) {
             return response()->json([
                 'success' => false,
-                'message' => 'Task project has no associated site',
+                'message' => 'Task has no associated site',
                 'data' => [],
             ]);
         }
 
         $stocks = Stock::with(['product.category'])
             ->where('location_type', 'site')
-            ->where('location_id', $project->site_id)
+            ->where('location_id', $task->site_id)
             ->where('balance', '>', 0)
             ->orderBy('product_id')
             ->get()
@@ -67,19 +65,18 @@ class TaskStockUsageController extends Controller
 
         $stock = Stock::with('product')->findOrFail($validated['stock_id']);
 
-        // Validate stock belongs to the task's project site
-        $project = $task->project;
-        if (!$project || !$project->site_id) {
+        // Validate stock belongs to the task's site
+        if (!$task->site_id) {
             return response()->json([
                 'success' => false,
-                'message' => 'Task project has no associated site',
+                'message' => 'Task has no associated site',
             ], 422);
         }
 
-        if ($stock->location_type !== 'site' || $stock->location_id != $project->site_id) {
+        if ($stock->location_type !== 'site' || $stock->location_id != $task->site_id) {
             return response()->json([
                 'success' => false,
-                'message' => 'Stock does not belong to the project site',
+                'message' => 'Stock does not belong to the task site',
             ], 422);
         }
 
@@ -93,6 +90,8 @@ class TaskStockUsageController extends Controller
 
         $usage = TaskStockUsage::create([
             'task_id' => $task->id,
+            'location_type' => $stock->location_type,
+            'location_id' => $stock->location_id,
             'product_id' => $stock->product_id,
             'stock_id' => $stock->id,
             'quantity' => $validated['quantity'],
@@ -172,7 +171,7 @@ class TaskStockUsageController extends Controller
             'data' => [
                 'usages' => $usages,
                 'total_material_cost' => $usages->sum('total_cost'),
-                'site_name' => $task->project->site->name ?? 'No Site',
+                'site_name' => $task->site->name ?? 'No Site',
             ],
         ]);
     }
@@ -230,7 +229,7 @@ class TaskStockUsageController extends Controller
                 'task_id' => $task->id,
                 'task_stock_usage_id' => $usage->id,
                 'from_type' => 'site',
-                'from_id' => $project->site_id,
+                'from_id' => $task->site_id,
                 'to_type' => $validated['destination_type'],
                 'to_id' => $validated['destination_id'],
                 'quantity' => $validated['quantity_to_return'],

@@ -12,7 +12,7 @@ class EmployeeController extends Controller
     {
         $user = $request->user();
 
-        $query = Employee::with(['site', 'todayAttendance.breaks', 'designation.category']);
+        $query = Employee::with(['site', 'factory', 'todayAttendance.breaks', 'designation.category']);
 
         // Allow fetching all employees (bypass site restriction) when all=true
         $fetchAll = $request->boolean('all', false);
@@ -64,7 +64,7 @@ class EmployeeController extends Controller
 
     public function show(Employee $employee)
     {
-        $employee->load(['site', 'todayAttendance.breaks', 'designation', 'taskAssignments' => function ($query) {
+        $employee->load(['site', 'factory', 'todayAttendance.breaks', 'designation', 'taskAssignments' => function ($query) {
             $query->whereNull('removed_at')->with('task');
         }]);
 
@@ -85,8 +85,12 @@ class EmployeeController extends Controller
             'hourly_rate' => 'nullable|numeric|min:0',
             'daily_rate' => 'nullable|numeric|min:0',
             'working_hours' => 'nullable|numeric|min:0.5|max:24',
+            'factory_daily_rate' => 'nullable|numeric|min:0',
+            'factory_hourly_rate' => 'nullable|numeric|min:0',
+            'factory_working_hours' => 'nullable|numeric|min:0.5|max:24',
             'photo' => 'nullable|string',
             'site_id' => 'nullable|exists:sites,id',
+            'factory_id' => 'nullable|exists:factories,id',
         ]);
 
         // Generate employee code based on designation
@@ -114,7 +118,7 @@ class EmployeeController extends Controller
         }
 
         $employee = Employee::create($validated);
-        $employee->load(['site', 'designation']);
+        $employee->load(['site', 'factory', 'designation']);
 
         return response()->json([
             'success' => true,
@@ -134,13 +138,17 @@ class EmployeeController extends Controller
             'hourly_rate' => 'nullable|numeric|min:0',
             'daily_rate' => 'nullable|numeric|min:0',
             'working_hours' => 'nullable|numeric|min:0.5|max:24',
+            'factory_daily_rate' => 'nullable|numeric|min:0',
+            'factory_hourly_rate' => 'nullable|numeric|min:0',
+            'factory_working_hours' => 'nullable|numeric|min:0.5|max:24',
             'photo' => 'nullable|string',
             'site_id' => 'nullable|exists:sites,id',
+            'factory_id' => 'nullable|exists:factories,id',
             'status' => 'sometimes|in:active,inactive',
         ]);
 
         $employee->update($validated);
-        $employee->load(['site', 'designation']);
+        $employee->load(['site', 'factory', 'designation']);
 
         return response()->json([
             'success' => true,
@@ -178,6 +186,73 @@ class EmployeeController extends Controller
         return response()->json([
             'success' => true,
             'data' => $employees,
+        ]);
+    }
+
+    /**
+     * Get work location options for the current user/employee
+     * Returns whether the user works at a factory or site, and the available options
+     */
+    public function workLocationOptions(Request $request)
+    {
+        $user = $request->user();
+
+        // Check if user is linked to an employee (for employee app users)
+        $employee = null;
+        if (isset($request->employee_id)) {
+            $employee = Employee::find($request->employee_id);
+        }
+
+        // If user is a supervisor, return their assigned location
+        if ($user->isSupervisor()) {
+            if ($user->site_id) {
+                $site = \App\Models\Site::with('projects')->find($user->site_id);
+
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'type' => 'site',
+                        'site' => $site,
+                        'projects' => $site->projects ?? [],
+                    ],
+                ]);
+            }
+        }
+
+        // For employees, return their work location
+        if ($employee) {
+            if ($employee->isFactoryEmployee()) {
+                $factory = $employee->factory;
+
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'type' => 'factory',
+                        'factory' => $factory,
+                    ],
+                ]);
+            } elseif ($employee->isSiteEmployee()) {
+                $site = \App\Models\Site::with('projects')->find($employee->site_id);
+
+                return response()->json([
+                    'success' => true,
+                    'data' => [
+                        'type' => 'site',
+                        'site' => $site,
+                        'projects' => $site->projects ?? [],
+                    ],
+                ]);
+            }
+        }
+
+        // Default: return both options if admin or unassigned
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'type' => 'both',
+                'sites' => \App\Models\Site::with('projects')->get(),
+                'factories' => \App\Models\Factory::all(),
+            ],
         ]);
     }
 }

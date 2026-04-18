@@ -7,13 +7,14 @@ use App\Models\Employee;
 use App\Models\Designation;
 use App\Models\DesignationCategory;
 use App\Models\Site;
+use App\Models\Factory;
 use Illuminate\Http\Request;
 
 class EmployeeController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Employee::with(['site', 'designation.category']);
+        $query = Employee::with(['site', 'factory', 'designation.category']);
 
         // Filter by site
         if ($request->filled('site_id')) {
@@ -92,9 +93,10 @@ class EmployeeController extends Controller
     public function create()
     {
         $sites = Site::orderBy('name')->get();
+        $factories = Factory::orderBy('name')->get();
         $categories = DesignationCategory::active()->orderBy('name')->get();
         $designations = Designation::active()->orderBy('name')->get();
-        return view('employees.create', compact('sites', 'categories', 'designations'));
+        return view('employees.create', compact('sites', 'factories', 'categories', 'designations'));
     }
 
     public function store(Request $request)
@@ -106,8 +108,12 @@ class EmployeeController extends Controller
             'employment_type' => 'required|in:permanent,contract,temporary',
             'daily_rate' => 'required|numeric|min:0',
             'working_hours' => 'required|numeric|min:1|max:24',
+            'factory_daily_rate' => 'nullable|numeric|min:0',
+            'factory_hourly_rate' => 'nullable|numeric|min:0',
+            'factory_working_hours' => 'nullable|numeric|min:0.5|max:24',
             'photo' => 'nullable|image|max:5120', // 5MB max
             'site_id' => 'nullable|exists:sites,id',
+            'factory_id' => 'nullable|exists:factories,id',
             'status' => 'required|in:active,inactive',
         ]);
 
@@ -148,9 +154,10 @@ class EmployeeController extends Controller
     {
         $employee->load('designation.category');
         $sites = Site::orderBy('name')->get();
+        $factories = Factory::orderBy('name')->get();
         $categories = DesignationCategory::active()->orderBy('name')->get();
         $designations = Designation::active()->orderBy('name')->get();
-        return view('employees.edit', compact('employee', 'sites', 'categories', 'designations'));
+        return view('employees.edit', compact('employee', 'sites', 'factories', 'categories', 'designations'));
     }
 
     public function update(Request $request, Employee $employee)
@@ -162,8 +169,12 @@ class EmployeeController extends Controller
             'employment_type' => 'required|in:permanent,contract,temporary',
             'daily_rate' => 'required|numeric|min:0',
             'working_hours' => 'required|numeric|min:1|max:24',
+            'factory_daily_rate' => 'nullable|numeric|min:0',
+            'factory_hourly_rate' => 'nullable|numeric|min:0',
+            'factory_working_hours' => 'nullable|numeric|min:0.5|max:24',
             'photo' => 'nullable|image|max:5120', // 5MB max
             'site_id' => 'nullable|exists:sites,id',
+            'factory_id' => 'nullable|exists:factories,id',
             'status' => 'required|in:active,inactive',
         ]);
 
@@ -202,7 +213,7 @@ class EmployeeController extends Controller
         $employee->load(['site', 'attendances' => function ($q) {
             $q->orderBy('date', 'desc')->limit(10);
         }, 'taskAssignments' => function ($q) {
-            $q->with('task.project.site')->orderBy('assigned_at', 'desc')->limit(10);
+            $q->with('task.project.sites', 'task.project.factories')->orderBy('assigned_at', 'desc')->limit(10);
         }]);
 
         // Calculate statistics
@@ -216,8 +227,8 @@ class EmployeeController extends Controller
             $activeAssignment = $employee->taskAssignments
                 ->whereNull('removed_at')
                 ->first();
-            if ($activeAssignment && $activeAssignment->task && $activeAssignment->task->project) {
-                $derivedSite = $activeAssignment->task->project->site;
+            if ($activeAssignment && $activeAssignment->task) {
+                $derivedSite = $activeAssignment->task->site;
             }
         }
 

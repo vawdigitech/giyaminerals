@@ -5,12 +5,14 @@ use App\Http\Controllers\Api\DesignationController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\FactoryController;
 use App\Http\Controllers\Api\TaskController;
 use App\Http\Controllers\Api\TaskAssignmentController;
 use App\Http\Controllers\Api\TaskWorkLogController;
 use App\Http\Controllers\Api\TaskStockUsageController;
 use App\Http\Controllers\Api\SiteIssueController;
 use App\Http\Controllers\Api\WorkSessionController;
+use App\Http\Controllers\Api\WorkLocationController;
 use App\Http\Controllers\Api\TaskProgressPhotoController;
 use App\Http\Controllers\Api\SalaryController;
 use App\Http\Controllers\Api\AdvancePaymentController;
@@ -36,6 +38,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
 
+    // Work Location Selection (for app initial screen)
+    Route::get('/work-location/options', [WorkLocationController::class, 'getOptions']);
+    Route::get('/work-location/site/{siteId}', [WorkLocationController::class, 'getSiteDetails']);
+    Route::get('/work-location/factory/{factoryId}', [WorkLocationController::class, 'getFactoryDetails']);
+
     // Designation Categories
     Route::get('/designation-categories', [DesignationController::class, 'categories']);
     Route::get('/designation-categories/{id}/designations', [DesignationController::class, 'byCategory']);
@@ -47,6 +54,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Employees
     Route::get('/employees', [EmployeeController::class, 'index']);
     Route::get('/employees/available', [EmployeeController::class, 'available']);
+    Route::get('/employees/work-location-options', [EmployeeController::class, 'workLocationOptions']);
     Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
     Route::post('/employees', [EmployeeController::class, 'store']);
     Route::put('/employees/{employee}', [EmployeeController::class, 'update']);
@@ -60,6 +68,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/attendance/{attendance}/check-out', [AttendanceController::class, 'checkOut']);
     Route::post('/attendance/{attendance}/break-out', [AttendanceController::class, 'breakOut']);
     Route::post('/attendance/{attendance}/break-in', [AttendanceController::class, 'breakIn']);
+    Route::post('/attendance/switch-active-task', [AttendanceController::class, 'switchActiveTask']);
     Route::get('/employees/{employee}/attendance-history', [AttendanceController::class, 'employeeHistory']);
 
     // Projects
@@ -67,6 +76,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/projects/summary', [ProjectController::class, 'summary']);
     Route::get('/projects/{project}', [ProjectController::class, 'show']);
     Route::post('/projects/{project}/update-progress', [ProjectController::class, 'updateProgress']);
+
+    // Factories
+    Route::get('/factories', [FactoryController::class, 'index']);
+    Route::get('/factories/{factory}', [FactoryController::class, 'show']);
+    Route::get('/factories/{factory}/attendance', [FactoryController::class, 'attendance']);
 
     // Tasks
     Route::get('/tasks', [TaskController::class, 'index']);

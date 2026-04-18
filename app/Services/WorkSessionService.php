@@ -14,17 +14,34 @@ class WorkSessionService
 {
     /**
      * Handle employee check-in
-     * Starts sessions for all active task assignments
+     * Starts sessions for all active task assignments at this location
      */
     public function handleCheckIn(Attendance $attendance): array
     {
         $employee = $attendance->employee;
         $sessionsStarted = [];
 
-        // Get all active task assignments for this employee
-        $activeAssignments = TaskAssignment::where('employee_id', $employee->id)
-            ->whereNull('removed_at')
-            ->get();
+        // Get all active task assignments for this employee at the current location
+        $query = TaskAssignment::where('employee_id', $employee->id)
+            ->whereNull('removed_at');
+
+        // Filter by attendance location (site or factory)
+        if ($attendance->site_id) {
+            $query->where('location_type', 'site')
+                  ->where('location_id', $attendance->site_id);
+        } elseif ($attendance->factory_id) {
+            $query->where('location_type', 'factory')
+                  ->where('location_id', $attendance->factory_id);
+        }
+
+        // Filter by project if specified
+        if ($attendance->project_id) {
+            $query->whereHas('task', function ($q) use ($attendance) {
+                $q->where('project_id', $attendance->project_id);
+            });
+        }
+
+        $activeAssignments = $query->get();
 
         foreach ($activeAssignments as $assignment) {
             $session = $this->startSession($assignment, $attendance);
@@ -45,6 +62,21 @@ class WorkSessionService
                 ];
             })->toArray(),
         ];
+    }
+
+    /**
+     * End all active sessions for an attendance
+     * Used for location transfers or early termination
+     */
+    public function endAllActiveSessions(Attendance $attendance, string $reason = 'transfer'): int
+    {
+        $activeSessions = $attendance->activeSessions()->get();
+
+        foreach ($activeSessions as $session) {
+            $session->end($reason);
+        }
+
+        return $activeSessions->count();
     }
 
     /**
@@ -99,16 +131,34 @@ class WorkSessionService
 
     /**
      * Handle break end
-     * Resumes sessions for all active task assignments
+     * Resumes sessions for all active task assignments at this location
      */
     public function handleBreakIn(Attendance $attendance): array
     {
         $employee = $attendance->employee;
         $sessionsStarted = [];
 
-        $activeAssignments = TaskAssignment::where('employee_id', $employee->id)
-            ->whereNull('removed_at')
-            ->get();
+        // Get all active task assignments for this employee at the current location
+        $query = TaskAssignment::where('employee_id', $employee->id)
+            ->whereNull('removed_at');
+
+        // Filter by attendance location (site or factory)
+        if ($attendance->site_id) {
+            $query->where('location_type', 'site')
+                  ->where('location_id', $attendance->site_id);
+        } elseif ($attendance->factory_id) {
+            $query->where('location_type', 'factory')
+                  ->where('location_id', $attendance->factory_id);
+        }
+
+        // Filter by project if specified
+        if ($attendance->project_id) {
+            $query->whereHas('task', function ($q) use ($attendance) {
+                $q->where('project_id', $attendance->project_id);
+            });
+        }
+
+        $activeAssignments = $query->get();
 
         foreach ($activeAssignments as $assignment) {
             $session = $this->startSession($assignment, $attendance);
@@ -124,7 +174,7 @@ class WorkSessionService
 
     /**
      * Handle new task assignment
-     * Starts session if employee is currently checked in
+     * Starts session if employee is currently checked in at the same location
      */
     public function handleNewAssignment(TaskAssignment $assignment): ?TaskAssignmentSession
     {
@@ -139,6 +189,25 @@ class WorkSessionService
 
         if (!$todayAttendance) {
             // Employee not checked in, session will start when they check in
+            return null;
+        }
+
+        // Check if assignment location matches attendance location
+        $locationMatches = false;
+
+        if ($todayAttendance->site_id && $assignment->location_type === 'site' && $assignment->location_id == $todayAttendance->site_id) {
+            $locationMatches = true;
+        } elseif ($todayAttendance->factory_id && $assignment->location_type === 'factory' && $assignment->location_id == $todayAttendance->factory_id) {
+            $locationMatches = true;
+        }
+
+        if (!$locationMatches) {
+            // Employee is checked in at a different location, don't start session
+            \Log::info("Not starting session - location mismatch", [
+                'assignment_id' => $assignment->id,
+                'assignment_location' => $assignment->location_type . ':' . $assignment->location_id,
+                'attendance_location' => ($todayAttendance->site_id ? 'site:' . $todayAttendance->site_id : 'factory:' . $todayAttendance->factory_id),
+            ]);
             return null;
         }
 
@@ -299,5 +368,77 @@ class WorkSessionService
         }
 
         return $query->orderBy('date', 'desc')->get();
+    }
+
+    /**
+     * Get all available task assignments for an employee at a location
+     */
+    public function getAvailableTaskAssignments($employeeId, $siteId = null, $factoryId = null, $projectId = null): array
+    {
+        $query = TaskAssignment::where('employee_id', $employeeId)
+            ->whereNull('removed_at')
+            ->with(['task.project']);
+
+        // Filter by location
+        if ($siteId) {
+            $query->where(function ($q) use ($siteId) {
+                $q->where('location_type', 'site')
+                  ->where('location_id', $siteId);
+            });
+        } elseif ($factoryId) {
+            $query->where(function ($q) use ($factoryId) {
+                $q->where('location_type', 'factory')
+                  ->where('location_id', $factoryId);
+            });
+        }
+
+        // Filter by project if specified
+        if ($projectId) {
+            $query->whereHas('task', function ($q) use ($projectId) {
+                $q->where('project_id', $projectId);
+            });
+        }
+
+        $assignments = $query->get();
+
+        return $assignments->map(function ($assignment) {
+            return [
+                'assignment_id' => $assignment->id,
+                'task_id' => $assignment->task_id,
+                'task_name' => $assignment->task->name,
+                'project_id' => $assignment->task->project_id,
+                'project_name' => $assignment->task->project->name ?? 'No Project',
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Switch active task - stops all current sessions and starts the selected one
+     */
+    public function switchActiveTask($attendance, $taskAssignment): array
+    {
+        // Step 1: Stop all active sessions for this attendance
+        $activeSessions = TaskAssignmentSession::where('attendance_id', $attendance->id)
+            ->where('status', 'active')
+            ->whereDate('date', today())
+            ->get();
+
+        foreach ($activeSessions as $session) {
+            $this->endSession($session, $attendance, 'task_switched');
+        }
+
+        // Step 2: Start new session for the selected task
+        $newSession = $this->startSession($taskAssignment, $attendance);
+
+        return [
+            'sessions_stopped' => $activeSessions->count(),
+            'new_session' => [
+                'session_id' => $newSession->id,
+                'task_id' => $taskAssignment->task_id,
+                'task_name' => $taskAssignment->task->name,
+                'project_name' => $taskAssignment->task->project->name ?? 'No Project',
+                'started_at' => $newSession->start_time,
+            ],
+        ];
     }
 }

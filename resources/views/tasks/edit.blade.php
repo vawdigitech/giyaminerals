@@ -68,8 +68,14 @@
                                             id="parent_id" name="parent_id">
                                             <option value="">-- No Parent (Top-level Task) --</option>
                                             @foreach($parentTasks as $parentTask)
+                                                @php
+                                                    $level = $parentTask->getNestingLevel();
+                                                    $indent = str_repeat('  ', $level);
+                                                    $prefix = $level > 0 ? '└─ ' : '';
+                                                    $displayName = $indent . $prefix . $parentTask->code . ' - ' . $parentTask->name;
+                                                @endphp
                                                 <option value="{{ $parentTask->id }}" {{ old('parent_id', $task->parent_id) == $parentTask->id ? 'selected' : '' }}>
-                                                    {{ $parentTask->code }} - {{ $parentTask->name }}
+                                                    {{ $displayName }}
                                                 </option>
                                             @endforeach
                                         </select>
@@ -266,7 +272,12 @@
                     </div>
                     <div class="card-footer text-muted small">
                         <i class="fas fa-info-circle mr-1"></i>
-                        Site: {{ $task->project->site->name ?? 'Not assigned' }}
+                        Locations:
+                        @if($task->project->sites->count() > 0 || $task->project->factories->count() > 0)
+                            {{ $task->project->sites->pluck('name')->concat($task->project->factories->pluck('name'))->join(', ') }}
+                        @else
+                            Not assigned
+                        @endif
                     </div>
                 </div>
 
@@ -423,7 +434,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (task.id != currentTaskId) {
                         const option = document.createElement('option');
                         option.value = task.id;
-                        option.textContent = `${task.code} - ${task.name}`;
+                        // Use display_name if available (includes hierarchy), otherwise fallback
+                        option.textContent = task.display_name || `${task.code} - ${task.name}`;
                         if (task.id == currentParentId) {
                             option.selected = true;
                         }

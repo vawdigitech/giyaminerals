@@ -42,7 +42,7 @@ class DashboardController extends Controller
         $monthlyProfitLoss = $monthlyQuoted - $monthlyActual;
 
         // --- Recent Projects with progress ---
-        $recentProjects = Project::with('site')
+        $recentProjects = Project::with(['sites', 'factories'])
             ->orderBy('updated_at', 'desc')
             ->take(6)
             ->get();

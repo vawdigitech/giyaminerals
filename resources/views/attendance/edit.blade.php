@@ -51,7 +51,7 @@
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label for="site_id">Site <span class="text-danger">*</span></label>
-                                <select name="site_id" id="site_id" class="form-control @error('site_id') is-invalid @enderror" required>
+                                <select name="site_id" id="site_id" class="form-control @error('site_id') is-invalid @enderror">
                                     <option value="">Select Site</option>
                                     @foreach($sites as $site)
                                         <option value="{{ $site->id }}" {{ (old('site_id', $attendance->site_id) == $site->id) ? 'selected' : '' }}>
@@ -62,6 +62,27 @@
                                 @error('site_id')
                                     <span class="invalid-feedback">{{ $message }}</span>
                                 @enderror
+                                <small class="form-text text-muted">Select either Site or Factory (not both)</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="factory_id">Factory <span class="text-danger">*</span></label>
+                                <select name="factory_id" id="factory_id" class="form-control @error('factory_id') is-invalid @enderror">
+                                    <option value="">Select Factory</option>
+                                    @foreach($factories as $factory)
+                                        <option value="{{ $factory->id }}" {{ (old('factory_id', $attendance->factory_id) == $factory->id) ? 'selected' : '' }}>
+                                            {{ $factory->name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                @error('factory_id')
+                                    <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                                <small class="form-text text-muted">Select either Site or Factory (not both)</small>
                             </div>
                         </div>
                     </div>
@@ -143,3 +164,20 @@
     </div>
 </section>
 @endsection
+
+@push('scripts')
+<script>
+    // Make site and factory mutually exclusive
+    document.getElementById('site_id').addEventListener('change', function() {
+        if (this.value) {
+            document.getElementById('factory_id').value = '';
+        }
+    });
+
+    document.getElementById('factory_id').addEventListener('change', function() {
+        if (this.value) {
+            document.getElementById('site_id').value = '';
+        }
+    });
+</script>
+@endpush

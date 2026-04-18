@@ -15,7 +15,7 @@ class TaskProgressPhotoController extends Controller
     public function index(Task $task)
     {
         $photos = $task->progressPhotos()
-            ->with('employee:id,name')
+            ->with(['employee:id,name', 'user:id,name,email'])
             ->get();
 
         return response()->json([
@@ -30,7 +30,7 @@ class TaskProgressPhotoController extends Controller
     public function byDate(Task $task)
     {
         $photos = $task->progressPhotos()
-            ->with('employee:id,name')
+            ->with(['employee:id,name', 'user:id,name,email'])
             ->get()
             ->groupBy(function ($photo) {
                 return $photo->captured_date->format('Y-m-d');
@@ -53,18 +53,20 @@ class TaskProgressPhotoController extends Controller
             'captured_date' => 'nullable|date',
         ]);
 
-        // Get the current authenticated user's employee_id
+        // Get the current authenticated user
         $user = $request->user();
 
+        // Create the progress photo with user_id and employee_id (if available)
         $photo = TaskProgressPhoto::create([
             'task_id' => $task->id,
-            'employee_id' => $user->employee_id ?? $user->id,
+            'user_id' => $user->id,
+            'employee_id' => $user->employee_id ?? null,
             'photo' => $validated['photo'],
             'caption' => $validated['caption'] ?? null,
             'captured_date' => $validated['captured_date'] ?? now()->toDateString(),
         ]);
 
-        $photo->load('employee:id,name');
+        $photo->load(['employee:id,name', 'user:id,name,email']);
 
         return response()->json([
             'success' => true,

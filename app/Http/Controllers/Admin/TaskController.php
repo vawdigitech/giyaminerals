@@ -11,10 +11,10 @@ class TaskController extends Controller
 {
     public function index(Request $request)
     {
-        $projectQuery = Project::with(['site', 'tasks' => function ($q) use ($request) {
+        $projectQuery = Project::with(['sites', 'factories', 'tasks' => function ($q) use ($request) {
             $q->whereNull('parent_id')
-              ->with(['subtasks' => function ($sq) use ($request) {
-                  // Apply status/priority/search filters to subtasks too
+              ->with(['allSubtasks' => function ($sq) use ($request) {
+                  // Apply status/priority/search filters to all nested subtasks
                   if ($request->filled('status')) {
                       $sq->where('status', $request->status);
                   }
@@ -81,17 +81,39 @@ class TaskController extends Controller
 
     public function create(Request $request)
     {
-        $projects = Project::orderBy('name')->get();
+        $projects = Project::with(['sites', 'factories'])->orderBy('name')->get();
         $parentTasks = [];
+        $projectLocations = [];
 
         if ($request->filled('project_id')) {
+            $project = Project::with(['sites', 'factories'])->find($request->project_id);
+
+            // Get all tasks in the project (not just master tasks)
+            // Allow both master tasks and sub-tasks to be selected as parent
             $parentTasks = Task::where('project_id', $request->project_id)
-                ->whereNull('parent_id')
                 ->orderByRaw("CAST(SUBSTRING_INDEX(code, '.', 1) AS UNSIGNED), CAST(SUBSTRING_INDEX(code, '.', -1) AS UNSIGNED)")
                 ->get();
+
+            // Get all locations for this project
+            if ($project) {
+                foreach ($project->sites as $site) {
+                    $projectLocations[] = [
+                        'type' => 'site',
+                        'id' => $site->id,
+                        'name' => $site->name . ' (Site)',
+                    ];
+                }
+                foreach ($project->factories as $factory) {
+                    $projectLocations[] = [
+                        'type' => 'factory',
+                        'id' => $factory->id,
+                        'name' => $factory->name . ' (Factory)',
+                    ];
+                }
+            }
         }
 
-        return view('tasks.create', compact('projects', 'parentTasks'));
+        return view('tasks.create', compact('projects', 'parentTasks', 'projectLocations'));
     }
 
     public function store(Request $request)
@@ -108,6 +130,8 @@ class TaskController extends Controller
             'status' => 'required|in:pending,in_progress,completed,on_hold',
             'start_date' => 'nullable|date',
             'due_date' => 'nullable|date|after_or_equal:start_date',
+            'location_ids' => 'required|array|min:1',
+            'location_ids.*' => 'required|string', // Format: "type:id" e.g. "site:1" or "factory:2"
         ]);
 
         // Set quoted_amount to 0 if not provided
@@ -124,7 +148,31 @@ class TaskController extends Controller
             return back()->withErrors(['code' => 'This task code already exists in the project.'])->withInput();
         }
 
+        // Prevent circular references if parent_id is set
+        if (isset($validated['parent_id']) && $validated['parent_id']) {
+            $parentTask = Task::find($validated['parent_id']);
+            if ($parentTask && $parentTask->project_id != $validated['project_id']) {
+                return back()->withErrors(['parent_id' => 'Parent task must be from the same project.'])->withInput();
+            }
+        }
+
         $task = Task::create($validated);
+
+        // Add task to selected locations
+        foreach ($validated['location_ids'] as $locationString) {
+            [$locationType, $locationId] = explode(':', $locationString);
+
+            \App\Models\TaskLocation::create([
+                'task_id' => $task->id,
+                'location_type' => $locationType,
+                'location_id' => $locationId,
+                'progress' => 0,
+                'status' => 'pending',
+                'labor_cost' => 0,
+                'material_cost' => 0,
+                'total_cost' => 0,
+            ]);
+        }
 
         // Initialize aggregated values for the newly created task
         $task->recalculateAggregatedCosts();
@@ -140,13 +188,15 @@ class TaskController extends Controller
         $task->project->updateStatusFromTasks();
 
         return redirect()->route('tasks.show', $task)
-            ->with('success', 'Task created successfully. You can now add materials below.');
+            ->with('success', 'Task created successfully and added to selected locations. You can now add materials below.');
     }
 
     public function show(Task $task)
     {
         $task->load([
-            'project.site',
+            'project.sites',
+            'project.factories',
+            'taskLocations',
             'parent',
             'subtasks.assignments.employee',
             'assignments.employee',
@@ -186,14 +236,21 @@ class TaskController extends Controller
 
     public function edit(Task $task)
     {
-        $task->load(['project.site', 'stockUsages.product']);
+        $task->load(['project.sites', 'project.factories', 'stockUsages.product']);
 
         $projects = Project::orderBy('name')->get();
-        $parentTasks = Task::where('project_id', $task->project_id)
-            ->whereNull('parent_id')
+
+        // Get all tasks in the project except the current task and its descendants
+        // This prevents circular references
+        $allTasks = Task::where('project_id', $task->project_id)
             ->where('id', '!=', $task->id)
             ->orderByRaw("CAST(SUBSTRING_INDEX(code, '.', 1) AS UNSIGNED), CAST(SUBSTRING_INDEX(code, '.', -1) AS UNSIGNED)")
             ->get();
+
+        // Filter out descendants to prevent circular references
+        $parentTasks = $allTasks->filter(function($potentialParent) use ($task) {
+            return !$task->isAncestorOf($potentialParent->id);
+        });
 
         return view('tasks.edit', compact('task', 'projects', 'parentTasks'));
     }
@@ -231,9 +288,11 @@ class TaskController extends Controller
             return back()->withErrors(['code' => 'This task code already exists in the project.'])->withInput();
         }
 
-        // Prevent task from being its own parent
-        if (isset($validated['parent_id']) && $validated['parent_id'] == $task->id) {
-            return back()->withErrors(['parent_id' => 'A task cannot be its own parent.'])->withInput();
+        // Prevent circular references
+        if (isset($validated['parent_id']) && $validated['parent_id']) {
+            if ($task->wouldCreateCircularReference($validated['parent_id'])) {
+                return back()->withErrors(['parent_id' => 'Invalid parent selection. This would create a circular reference (a task cannot be a parent of its own ancestor).'])->withInput();
+            }
         }
 
         $task->update($validated);
@@ -288,13 +347,21 @@ class TaskController extends Controller
     }
 
     // AJAX endpoint to get tasks by project
+    // Returns all tasks (both master and sub-tasks) for parent selection
     public function getByProject(Project $project)
     {
         $tasks = $project->tasks()
-            ->whereNull('parent_id')
             ->with('subtasks')
             ->orderByRaw("CAST(SUBSTRING_INDEX(code, '.', 1) AS UNSIGNED), CAST(SUBSTRING_INDEX(code, '.', -1) AS UNSIGNED)")
             ->get();
+
+        // Add a display_name attribute to show hierarchy
+        $tasks->each(function($task) {
+            $level = $task->getNestingLevel();
+            $indent = str_repeat('  ', $level); // 2 spaces per level
+            $prefix = $level > 0 ? '└─ ' : '';
+            $task->display_name = $indent . $prefix . $task->code . ' - ' . $task->name;
+        });
 
         return response()->json($tasks);
     }

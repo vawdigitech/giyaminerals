@@ -8,6 +8,8 @@ class TaskAssignment extends Model
 {
     protected $fillable = [
         'task_id',
+        'location_type',
+        'location_id',
         'employee_id',
         'assigned_by',
         'assigned_at',
@@ -97,13 +99,39 @@ class TaskAssignment extends Model
 
         $updateData = ['hours_worked' => $totalHours];
 
-        // If hourly_rate_at_time is 0, try to get the current employee rate
-        if (empty($this->hourly_rate_at_time) || $this->hourly_rate_at_time == 0) {
-            $employeeRate = $this->employee->hourly_rate ?? 0;
+        // Get the most recent completed session to determine the attendance location
+        $latestSession = $this->completedSessions()->with('attendance')->latest('date')->first();
+
+        // Always update the rate based on actual attendance location where work was done
+        if ($latestSession && $latestSession->attendance) {
+            // Use location-aware rate based on the actual attendance
+            $employeeRate = $this->employee->getHourlyRateForAttendance($latestSession->attendance);
+
+            if ($employeeRate > 0) {
+                $updateData['hourly_rate_at_time'] = $employeeRate;
+            }
+        } elseif (empty($this->hourly_rate_at_time) || $this->hourly_rate_at_time == 0) {
+            // Fallback only if no sessions and rate is 0: Get rate based on assignment location
+            $attendance = new \stdClass();
+            $attendance->factory_id = $this->location_type === 'factory' ? $this->location_id : null;
+            $attendance->site_id = $this->location_type === 'site' ? $this->location_id : null;
+            $employeeRate = $this->employee->getHourlyRateForAttendance($attendance);
+
             if ($employeeRate > 0) {
                 $updateData['hourly_rate_at_time'] = $employeeRate;
             }
         }
+
+        \Log::info("Task assignment hours recalculated", [
+            'assignment_id' => $this->id,
+            'task_id' => $this->task_id,
+            'employee_id' => $this->employee_id,
+            'location_type' => $this->location_type,
+            'location_id' => $this->location_id,
+            'total_hours' => $totalHours,
+            'hourly_rate' => $updateData['hourly_rate_at_time'] ?? $this->hourly_rate_at_time,
+            'labor_cost' => $totalHours * ($updateData['hourly_rate_at_time'] ?? $this->hourly_rate_at_time),
+        ]);
 
         $this->update($updateData);
 
@@ -119,7 +147,18 @@ class TaskAssignment extends Model
     public function syncHourlyRateFromEmployee()
     {
         if (empty($this->hourly_rate_at_time) || $this->hourly_rate_at_time == 0) {
-            $employeeRate = $this->employee->hourly_rate ?? 0;
+            // Get employee's today attendance to determine appropriate rate
+            $todayAttendance = $this->employee->todayAttendance()->first();
+
+            // If no attendance today, create a mock attendance based on assignment location
+            if (!$todayAttendance) {
+                $todayAttendance = new \stdClass();
+                $todayAttendance->factory_id = $this->location_type === 'factory' ? $this->location_id : null;
+                $todayAttendance->site_id = $this->location_type === 'site' ? $this->location_id : null;
+            }
+
+            $employeeRate = $this->employee->getHourlyRateForAttendance($todayAttendance) ?? 0;
+
             if ($employeeRate > 0) {
                 $this->update(['hourly_rate_at_time' => $employeeRate]);
                 return true;
