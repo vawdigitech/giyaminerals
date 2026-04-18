@@ -40,6 +40,37 @@
                 </div>
             </div>
 
+            <!-- Task Selection Section (shown only when destination is a Site) -->
+            <div id="taskSection" style="display: none;">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> You can optionally assign this transfer to a specific task. This will automatically create a material usage record.
+                </div>
+                <div class="form-group">
+                    <label>Master Task (Optional)</label>
+                    <select id="masterTask" class="form-control">
+                        <option value="">-- No Task (Stock only) --</option>
+                    </select>
+                </div>
+                <div class="form-group" id="subTaskGroup" style="display: none;">
+                    <label>Sub Task (Optional)</label>
+                    <select id="subTask" class="form-control">
+                        <option value="">-- Select Sub Task --</option>
+                    </select>
+                    <small class="text-muted">Leave empty to assign to the master task</small>
+                </div>
+                <!-- Hidden field to submit the actual task_id -->
+                <input type="hidden" name="task_id" id="taskIdInput" value="">
+
+                <!-- Work Location Selection (shown after task is selected) -->
+                <div class="form-group" id="workLocationGroup" style="display: none;">
+                    <label>Work Location <span class="text-danger">*</span></label>
+                    <select name="work_location" id="workLocation" class="form-control">
+                        <option value="">-- Select Work Location --</option>
+                    </select>
+                    <small class="text-muted">Select whether this material is for factory or site work</small>
+                </div>
+            </div>
+
             <div class="form-group mt-2">
                 <label>Quantity</label>
                 <input type="number" name="quantity" class="form-control" required value="{{ old('quantity') }}">
@@ -144,6 +175,146 @@
         const selectedFrom = fromSelect.value;
         populateToSelect(selectedFrom);
     });
+
+    // Task and Work Location handling
+    const taskSection = document.getElementById('taskSection');
+    const masterTaskSelect = document.getElementById('masterTask');
+    const subTaskGroup = document.getElementById('subTaskGroup');
+    const subTaskSelect = document.getElementById('subTask');
+    const taskIdInput = document.getElementById('taskIdInput');
+    const workLocationGroup = document.getElementById('workLocationGroup');
+    const workLocationSelect = document.getElementById('workLocation');
+
+    // Handle destination change - show task section if destination is a site
+    toSelect.addEventListener('change', function() {
+        const toValue = toSelect.value;
+        if (!toValue) {
+            taskSection.style.display = 'none';
+            return;
+        }
+
+        const [toType, toId] = toValue.split(':');
+        if (toType === 'site') {
+            taskSection.style.display = 'block';
+            fetchTasksBySite(toId);
+        } else {
+            taskSection.style.display = 'none';
+            resetTaskFields();
+        }
+    });
+
+    // Handle master task change
+    masterTaskSelect.addEventListener('change', function() {
+        const taskId = masterTaskSelect.value;
+        subTaskSelect.innerHTML = '<option value="">-- Select Sub Task --</option>';
+        workLocationSelect.innerHTML = '<option value="">-- Select Work Location --</option>';
+
+        if (taskId) {
+            subTaskGroup.style.display = 'block';
+            fetchSubtasks(taskId);
+            taskIdInput.value = taskId;
+            fetchTaskLocations(taskId);
+        } else {
+            subTaskGroup.style.display = 'none';
+            workLocationGroup.style.display = 'none';
+            taskIdInput.value = '';
+        }
+    });
+
+    // Handle sub task change
+    subTaskSelect.addEventListener('change', function() {
+        const subTaskId = subTaskSelect.value;
+        const masterTaskId = masterTaskSelect.value;
+        const selectedTaskId = subTaskId || masterTaskId;
+
+        taskIdInput.value = selectedTaskId;
+
+        if (selectedTaskId) {
+            fetchTaskLocations(selectedTaskId);
+        }
+    });
+
+    function resetTaskFields() {
+        masterTaskSelect.innerHTML = '<option value="">-- No Task (Stock only) --</option>';
+        subTaskSelect.innerHTML = '<option value="">-- Select Sub Task --</option>';
+        workLocationSelect.innerHTML = '<option value="">-- Select Work Location --</option>';
+        subTaskGroup.style.display = 'none';
+        workLocationGroup.style.display = 'none';
+        taskIdInput.value = '';
+    }
+
+    function fetchTasksBySite(siteId) {
+        resetTaskFields();
+        fetch(`/sites/${siteId}/tasks`)
+            .then(res => res.json())
+            .then(response => {
+                if (response.success && response.data.length > 0) {
+                    response.data.forEach(task => {
+                        masterTaskSelect.add(new Option(task.display_name, task.id));
+                    });
+                } else {
+                    masterTaskSelect.add(new Option('No tasks found for this site', '', true, false));
+                    if (response.message) {
+                        toastr.info(response.message);
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('Task loading error:', err);
+                toastr.error('Failed to load tasks');
+                masterTaskSelect.add(new Option('Error loading tasks', '', true, false));
+            });
+    }
+
+    function fetchSubtasks(taskId) {
+        fetch(`/tasks/${taskId}/subtasks`)
+            .then(res => res.json())
+            .then(response => {
+                if (response.success && response.data.length > 0) {
+                    response.data.forEach(subtask => {
+                        subTaskSelect.add(new Option(subtask.display_name, subtask.id));
+                    });
+                } else {
+                    subTaskSelect.add(new Option('No subtasks - will assign to master task', '', true, false));
+                }
+            })
+            .catch(err => {
+                console.error('Subtask loading error:', err);
+                toastr.error('Failed to load subtasks');
+            });
+    }
+
+    function fetchTaskLocations(taskId) {
+        workLocationSelect.innerHTML = '<option value="">-- Loading... --</option>';
+        workLocationGroup.style.display = 'none';
+
+        fetch(`/tasks/${taskId}/locations`)
+            .then(res => res.json())
+            .then(response => {
+                workLocationSelect.innerHTML = '<option value="">-- Select Work Location --</option>';
+
+                if (response.success && response.data.length > 0) {
+                    response.data.forEach(location => {
+                        workLocationSelect.add(new Option(
+                            location.display_name,
+                            `${location.location_type}:${location.location_id}`
+                        ));
+                    });
+                    workLocationGroup.style.display = 'block';
+                    workLocationSelect.required = true;
+                } else {
+                    workLocationSelect.add(new Option('No work locations assigned to this task', '', true, false));
+                    toastr.warning('This task has no work locations assigned.');
+                    workLocationSelect.required = false;
+                }
+            })
+            .catch(err => {
+                console.error('Work location loading error:', err);
+                workLocationSelect.innerHTML = '<option value="">-- Error loading locations --</option>';
+                toastr.error('Failed to load work locations');
+                workLocationSelect.required = false;
+            });
+    }
 
     if (oldProductId) {
         productSelect.dispatchEvent(new Event('change'));

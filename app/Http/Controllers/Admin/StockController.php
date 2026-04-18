@@ -60,13 +60,15 @@ class StockController extends Controller
             'quantity' => 'required|integer|min:1',
             'entry_date' => 'required|date',
             'reference' => 'nullable|string',
-            'task_id' => 'nullable|exists:tasks,id'
+            'task_id' => 'nullable|exists:tasks,id',
+            'work_location' => 'nullable|required_with:task_id|string'
         ]);
 
         $user = Auth::user();
 
         [$type, $id] = explode(':', $data['location']);
         $taskId = $data['task_id'] ?? null;
+        $workLocation = $data['work_location'] ?? null;
 
         DB::beginTransaction();
         try {
@@ -98,11 +100,26 @@ class StockController extends Controller
 
             // If task is selected, auto-create TaskStockUsage
             if ($taskId) {
+                if (!$workLocation) {
+                    throw new \Exception('Work location is required when assigning stock to a task');
+                }
+
+                // Parse work location (format: "location_type:location_id")
+                [$workLocationType, $workLocationId] = explode(':', $workLocation);
+
+                // Validate that the task is assigned to this location
+                $task = Task::find($taskId);
+                if (!$task->isAtLocation($workLocationType, $workLocationId)) {
+                    throw new \Exception("Task is not assigned to the selected work location: $workLocationType - $workLocationId");
+                }
+
                 $product = Product::find($data['product_id']);
                 $unitPrice = $product->unit_price ?? 0;
 
                 TaskStockUsage::create([
                     'task_id' => $taskId,
+                    'location_type' => $workLocationType,
+                    'location_id' => $workLocationId,
                     'product_id' => $data['product_id'],
                     'stock_id' => $stock->id,
                     'quantity' => $data['quantity'],
@@ -124,7 +141,9 @@ class StockController extends Controller
 
     public function entries()
     {
-        $entries = StockEntry::with('product', 'user', 'task')->orderByDesc('entry_date')->get();
+        $entries = StockEntry::with('product.category', 'user', 'task')
+            ->orderByDesc('entry_date')
+            ->get();
         return view('stocks.entries', compact('entries'));
     }
 
@@ -133,28 +152,62 @@ class StockController extends Controller
      */
     public function getTasksBySite(Site $site)
     {
-        $projects = Project::where('site_id', $site->id)->pluck('id');
+        try {
+            // Get all projects that are assigned to this site through project_locations
+            $projects = Project::whereHas('sites', function($query) use ($site) {
+                $query->where('sites.id', $site->id);
+            })->pluck('id');
 
-        $tasks = Task::whereIn('project_id', $projects)
-            ->whereNull('parent_id')
-            ->with('project:id,name,code')
-            ->orderBy('code')
-            ->get()
-            ->map(function ($task) {
-                return [
-                    'id' => $task->id,
-                    'code' => $task->code,
-                    'name' => $task->name,
-                    'project_name' => $task->project->name ?? 'Unknown',
-                    'project_code' => $task->project->code ?? '',
-                    'display_name' => "[{$task->code}] {$task->name} ({$task->project->name})",
-                ];
-            });
+            if ($projects->isEmpty()) {
+                \Log::warning("No projects found for site", ['site_id' => $site->id, 'site_name' => $site->name]);
+            }
 
-        return response()->json([
-            'success' => true,
-            'data' => $tasks,
-        ]);
+            // Get all master tasks from those projects that have a task_location for this site
+            $tasks = Task::whereIn('project_id', $projects)
+                ->whereNull('parent_id')
+                ->whereHas('taskLocations', function($query) use ($site) {
+                    $query->where('location_type', 'site')
+                          ->where('location_id', $site->id);
+                })
+                ->with('project:id,name,code')
+                ->orderBy('code')
+                ->get()
+                ->map(function ($task) {
+                    return [
+                        'id' => $task->id,
+                        'code' => $task->code,
+                        'name' => $task->name,
+                        'project_name' => $task->project->name ?? 'Unknown',
+                        'project_code' => $task->project->code ?? '',
+                        'display_name' => "[{$task->code}] {$task->name} ({$task->project->name})",
+                    ];
+                });
+
+            \Log::info("Tasks loaded for site", [
+                'site_id' => $site->id,
+                'site_name' => $site->name,
+                'project_count' => $projects->count(),
+                'task_count' => $tasks->count()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $tasks,
+                'message' => $tasks->isEmpty() ? 'No tasks found for this site' : null,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to load tasks for site", [
+                'site_id' => $site->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'data' => [],
+                'message' => 'Failed to load tasks: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -178,5 +231,41 @@ class StockController extends Controller
             'success' => true,
             'data' => $subtasks,
         ]);
+    }
+
+    /**
+     * Get work locations (factory/site) for a given task
+     */
+    public function getTaskLocations(Task $task)
+    {
+        try {
+            $locations = $task->taskLocations()
+                ->get()
+                ->map(function ($taskLocation) {
+                    $location = $taskLocation->getLocation();
+                    return [
+                        'location_type' => $taskLocation->location_type,
+                        'location_id' => $taskLocation->location_id,
+                        'location_name' => $location ? $location->name : 'Unknown',
+                        'display_name' => strtoupper($taskLocation->location_type) . ': ' . ($location ? $location->name : 'Unknown'),
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'data' => $locations,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("Failed to load task locations", [
+                'task_id' => $task->id ?? null,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'data' => [],
+                'message' => 'Failed to load task locations',
+            ], 500);
+        }
     }
 }

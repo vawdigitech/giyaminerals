@@ -8,7 +8,11 @@ use App\Models\Stock;
 use App\Models\Site;
 use App\Models\Product;
 use App\Models\Warehouse;
+use App\Models\Task;
+use App\Models\TaskStockUsage;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class TransferController extends Controller
 {
@@ -40,7 +44,9 @@ class TransferController extends Controller
             'from' => 'required|string',
             'to' => 'required|string|different:from',
             'quantity' => 'required|integer|min:1',
-            'transfer_date' => 'required|date'
+            'transfer_date' => 'required|date',
+            'task_id' => 'nullable|exists:tasks,id',
+            'work_location' => 'nullable|required_with:task_id|string'
         ]);
 
         [$from_type, $from_id] = explode(':', $request->input('from'));
@@ -54,6 +60,8 @@ class TransferController extends Controller
             'to_id' => $to_id,
             'quantity' => $request->quantity,
             'transfer_date' => $request->transfer_date,
+            'task_id' => $request->task_id,
+            'created_by' => Auth::id(),
         ];
 
         $stockFrom = Stock::where([
@@ -66,24 +74,64 @@ class TransferController extends Controller
             return back()->withInput()->with('error', 'Insufficient stock in source.');
         }
 
-        $stockFrom->increment('transferred_quantity', $data['quantity']);
-        $stockFrom->update(['last_updated_at' => now()]);
+        DB::beginTransaction();
+        try {
+            $stockFrom->increment('transferred_quantity', $data['quantity']);
+            $stockFrom->update(['last_updated_at' => now()]);
 
-        $stockTo = Stock::firstOrCreate([
-            'product_id' => $data['product_id'],
-            'location_type' => $to_type,
-            'location_id' => $to_id
-        ], [
-            'received_quantity' => 0,
-            'transferred_quantity' => 0,
-            'last_updated_at' => now()
-        ]);
-        $stockTo->increment('received_quantity', $data['quantity']);
-        $stockTo->update(['last_updated_at' => now()]);
+            $stockTo = Stock::firstOrCreate([
+                'product_id' => $data['product_id'],
+                'location_type' => $to_type,
+                'location_id' => $to_id
+            ], [
+                'received_quantity' => 0,
+                'transferred_quantity' => 0,
+                'last_updated_at' => now()
+            ]);
+            $stockTo->increment('received_quantity', $data['quantity']);
+            $stockTo->update(['last_updated_at' => now()]);
 
-        Transfer::create($data);
+            Transfer::create($data);
 
-        return redirect()->route('transfers.index')->with('success', 'Transfer recorded.');
+            // If task is selected, create TaskStockUsage
+            if ($request->task_id && $request->work_location) {
+                [$workLocationType, $workLocationId] = explode(':', $request->work_location);
+
+                // Validate that the task is assigned to this location
+                $task = Task::find($request->task_id);
+                if (!$task->isAtLocation($workLocationType, $workLocationId)) {
+                    throw new \Exception("Task is not assigned to the selected work location");
+                }
+
+                $product = Product::find($request->product_id);
+                $unitPrice = $product->unit_price ?? 0;
+
+                TaskStockUsage::create([
+                    'task_id' => $request->task_id,
+                    'location_type' => $workLocationType,
+                    'location_id' => $workLocationId,
+                    'product_id' => $request->product_id,
+                    'stock_id' => $stockTo->id,
+                    'quantity' => $request->quantity,
+                    'unit_price' => $unitPrice,
+                    'notes' => 'Created from transfer',
+                    'used_by' => Auth::id(),
+                    'used_at' => now(),
+                ]);
+            }
+
+            DB::commit();
+
+            $message = 'Transfer recorded.';
+            if ($request->task_id) {
+                $message .= ' Material usage also recorded for task.';
+            }
+
+            return redirect()->route('transfers.index')->with('success', $message);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->withInput()->with('error', 'Failed to record transfer: ' . $e->getMessage());
+        }
     }
 
     public function getStockLocations(Request $request)

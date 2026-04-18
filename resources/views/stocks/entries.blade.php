@@ -22,6 +22,7 @@
           <th>Category</th>
           <th>Location</th>
           <th>Task</th>
+          <th>Work Location</th>
           <th>Qty</th>
           <th>Reference</th>
           <th>Entry Date</th>
@@ -39,6 +40,13 @@
               <a href="{{ route('tasks.show', $e->task) }}" class="text-primary">
                 [{{ $e->task->code }}] {{ Str::limit($e->task->name, 20) }}
               </a>
+            @else
+              -
+            @endif
+          </td>
+          <td>
+            @if($e->task)
+              <span class="badge badge-info">{{ $e->work_location_name }}</span>
             @else
               -
             @endif

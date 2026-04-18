@@ -64,6 +64,15 @@
                 </div>
                 <!-- Hidden field to submit the actual task_id -->
                 <input type="hidden" name="task_id" id="taskIdInput" value="">
+
+                <!-- Work Location Selection (shown after task is selected) -->
+                <div class="form-group" id="workLocationGroup" style="display: none;">
+                    <label>Work Location <span class="text-danger">*</span></label>
+                    <select name="work_location" id="workLocation" class="form-control" required>
+                        <option value="">-- Select Work Location --</option>
+                    </select>
+                    <small class="text-muted">Select whether this material is for factory or site work</small>
+                </div>
             </div>
 
             <div class="form-group">
@@ -97,6 +106,8 @@ $(function() {
     const masterTaskSelect = $('#masterTask');
     const subTaskGroup = $('#subTaskGroup');
     const subTaskSelect = $('#subTask');
+    const workLocationGroup = $('#workLocationGroup');
+    const workLocationSelect = $('#workLocation');
 
     // Handle location change
     locationSelect.on('change', function() {
@@ -107,7 +118,9 @@ $(function() {
         // Reset task fields
         masterTaskSelect.html('<option value="">-- No Task (Stock only) --</option>');
         subTaskSelect.html('<option value="">-- Select Sub Task --</option>');
+        workLocationSelect.html('<option value="">-- Select Work Location --</option>');
         subTaskGroup.hide();
+        workLocationGroup.hide();
 
         if (locationType === 'site' && siteId) {
             taskSection.show();
@@ -124,14 +137,18 @@ $(function() {
     masterTaskSelect.on('change', function() {
         const taskId = $(this).val();
         subTaskSelect.html('<option value="">-- Select Sub Task --</option>');
+        workLocationSelect.html('<option value="">-- Select Work Location --</option>');
 
         if (taskId) {
             subTaskGroup.show();
             fetchSubtasks(taskId);
             // Set task_id to master task initially
             taskIdInput.val(taskId);
+            // Fetch work locations for this task
+            fetchTaskLocations(taskId);
         } else {
             subTaskGroup.hide();
+            workLocationGroup.hide();
             taskIdInput.val('');
         }
     });
@@ -140,8 +157,15 @@ $(function() {
     subTaskSelect.on('change', function() {
         const subTaskId = $(this).val();
         const masterTaskId = masterTaskSelect.val();
+        const selectedTaskId = subTaskId || masterTaskId;
+
         // If subtask is selected, use it; otherwise use master task
-        taskIdInput.val(subTaskId || masterTaskId);
+        taskIdInput.val(selectedTaskId);
+
+        // Fetch work locations for the selected task (subtask or master)
+        if (selectedTaskId) {
+            fetchTaskLocations(selectedTaskId);
+        }
     });
 
     // Fetch tasks for a site
@@ -160,10 +184,25 @@ $(function() {
                     masterTaskSelect.append(
                         '<option value="" disabled>No tasks found for this site</option>'
                     );
+                    if (response.message) {
+                        toastr.info(response.message);
+                    }
                 }
             },
-            error: function() {
-                toastr.error('Failed to load tasks');
+            error: function(xhr) {
+                console.error('Task loading error:', xhr);
+                let errorMsg = 'Failed to load tasks';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMsg += ': ' + xhr.responseJSON.message;
+                } else if (xhr.status === 403) {
+                    errorMsg += ': Permission denied';
+                } else if (xhr.status === 401) {
+                    errorMsg += ': Not authenticated';
+                }
+                toastr.error(errorMsg);
+                masterTaskSelect.append(
+                    '<option value="" disabled>Error loading tasks</option>'
+                );
             }
         });
     }
@@ -188,6 +227,42 @@ $(function() {
             },
             error: function() {
                 toastr.error('Failed to load subtasks');
+            }
+        });
+    }
+
+    // Fetch work locations for a task
+    function fetchTaskLocations(taskId) {
+        workLocationSelect.html('<option value="">-- Loading... --</option>');
+        workLocationGroup.hide();
+
+        $.ajax({
+            url: `/tasks/${taskId}/locations`,
+            method: 'GET',
+            success: function(response) {
+                workLocationSelect.html('<option value="">-- Select Work Location --</option>');
+
+                if (response.success && response.data.length > 0) {
+                    response.data.forEach(function(location) {
+                        workLocationSelect.append(
+                            `<option value="${location.location_type}:${location.location_id}">${location.display_name}</option>`
+                        );
+                    });
+                    workLocationGroup.show();
+                    workLocationSelect.prop('required', true);
+                } else {
+                    workLocationSelect.append(
+                        '<option value="" disabled>No work locations assigned to this task</option>'
+                    );
+                    toastr.warning('This task has no work locations assigned. Please assign locations to the task first.');
+                    workLocationSelect.prop('required', false);
+                }
+            },
+            error: function(xhr) {
+                console.error('Work location loading error:', xhr);
+                workLocationSelect.html('<option value="">-- Error loading locations --</option>');
+                toastr.error('Failed to load work locations');
+                workLocationSelect.prop('required', false);
             }
         });
     }
