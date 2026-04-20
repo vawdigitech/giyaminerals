@@ -1,0 +1,14 @@
+/* Simple CSS - no aggressive hiding rules */
+
+/* Just ensure proper layout */
+.pagination {
+    margin-bottom: 0 !important;
+}
+
+.pagination-info {
+    flex: 1;
+}
+
+.pagination-info p {
+    font-size: 14px;
+}
