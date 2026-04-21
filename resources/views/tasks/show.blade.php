@@ -53,7 +53,7 @@
                                 <b>Parent Task</b> <span class="float-right">{{ $task->parent->name ?? 'None (Top-level)' }}</span>
                             </li>
                             <li class="list-group-item">
-                                <b>Progress</b>
+                                <b>Overall Progress</b>
                                 <div class="float-right" style="width: 100px;">
                                     <div class="progress progress-sm">
                                         <div class="progress-bar bg-primary" style="width: {{ $task->progress ?? 0 }}%"></div>
@@ -127,17 +127,19 @@
                     </div>
                 </div>
 
-                <!-- Location-wise Costs Card -->
+                <!-- Location-wise Progress & Costs Card -->
                 @if(!$task->hasSubtasks() && $task->taskLocations->count() > 0)
                 <div class="card card-info">
                     <div class="card-header">
-                        <h3 class="card-title"><i class="fas fa-map-marker-alt mr-1"></i> Location-wise Costs</h3>
+                        <h3 class="card-title"><i class="fas fa-map-marker-alt mr-1"></i> Location-wise Progress & Costs</h3>
                     </div>
                     <div class="card-body p-0">
                         <table class="table table-sm mb-0">
                             <thead>
                                 <tr>
                                     <th>Location</th>
+                                    <th class="text-center">Progress</th>
+                                    <th class="text-center">Status</th>
                                     <th class="text-right">Labor</th>
                                     <th class="text-right">Material</th>
                                     <th class="text-right">Total</th>
@@ -161,6 +163,18 @@
                                             {{ $location->name ?? 'Unknown' }}
                                             <small class="text-muted">({{ $locationType }})</small>
                                         </td>
+                                        <td class="text-center" style="width: 120px;">
+                                            <div class="progress progress-sm">
+                                                <div class="progress-bar bg-{{ $taskLocation->progress >= 100 ? 'success' : 'primary' }}"
+                                                     style="width: {{ $taskLocation->progress ?? 0 }}%"></div>
+                                            </div>
+                                            <small>{{ $taskLocation->progress ?? 0 }}%</small>
+                                        </td>
+                                        <td class="text-center">
+                                            <span class="badge badge-{{ $taskLocation->status === 'completed' ? 'success' : ($taskLocation->status === 'in_progress' ? 'primary' : ($taskLocation->status === 'on_hold' ? 'warning' : 'secondary')) }}">
+                                                {{ ucfirst(str_replace('_', ' ', $taskLocation->status ?? 'pending')) }}
+                                            </span>
+                                        </td>
                                         <td class="text-right">₹{{ number_format($taskLocation->labor_cost ?? 0, 2) }}</td>
                                         <td class="text-right">₹{{ number_format($taskLocation->material_cost ?? 0, 2) }}</td>
                                         <td class="text-right"><strong>₹{{ number_format($taskLocation->total_cost ?? 0, 2) }}</strong></td>
@@ -169,7 +183,7 @@
                             </tbody>
                             <tfoot class="bg-light">
                                 <tr>
-                                    <th>Total</th>
+                                    <th colspan="3">Total (All Locations)</th>
                                     <th class="text-right">₹{{ number_format($totalLocationLabor, 2) }}</th>
                                     <th class="text-right">₹{{ number_format($totalLocationMaterial, 2) }}</th>
                                     <th class="text-right">₹{{ number_format($totalLocationLabor + $totalLocationMaterial, 2) }}</th>

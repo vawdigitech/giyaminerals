@@ -12,16 +12,29 @@ class SiteIssueController extends Controller
     {
         $user = $request->user();
 
-        $query = SiteIssue::with(['site', 'task', 'reportedBy', 'assignedTo']);
+        $query = SiteIssue::with(['site', 'factory', 'task', 'reportedBy', 'assignedTo']);
 
         // Supervisors only see issues at their site
         if ($user->isSupervisor() && $user->site_id) {
             $query->where('site_id', $user->site_id);
         }
 
-        // Filter by site
+        // Filter by work location (site or factory)
         if ($request->has('site_id')) {
             $query->where('site_id', $request->site_id);
+        }
+
+        if ($request->has('factory_id')) {
+            $query->where('factory_id', $request->factory_id);
+        }
+
+        // Filter by location type and id (alternative format)
+        if ($request->has('location_type') && $request->has('location_id')) {
+            if ($request->location_type === 'site') {
+                $query->where('site_id', $request->location_id);
+            } elseif ($request->location_type === 'factory') {
+                $query->where('factory_id', $request->location_id);
+            }
         }
 
         // Filter by status
@@ -59,7 +72,8 @@ class SiteIssueController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'site_id' => 'required|exists:sites,id',
+            'site_id' => 'nullable|exists:sites,id',
+            'factory_id' => 'nullable|exists:factories,id',
             'task_id' => 'nullable|exists:tasks,id',
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -69,10 +83,26 @@ class SiteIssueController extends Controller
             'photos.*' => 'string',
         ]);
 
+        // Validate that at least one location is provided
+        if (empty($validated['site_id']) && empty($validated['factory_id'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Either site_id or factory_id must be provided',
+            ], 422);
+        }
+
+        // Validate that only one location is provided
+        if (!empty($validated['site_id']) && !empty($validated['factory_id'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only one location (site_id or factory_id) can be provided, not both',
+            ], 422);
+        }
+
         $user = $request->user();
 
         // If supervisor, default to their site
-        if ($user->isSupervisor() && $user->site_id) {
+        if ($user->isSupervisor() && $user->site_id && empty($validated['site_id']) && empty($validated['factory_id'])) {
             $validated['site_id'] = $user->site_id;
         }
 
@@ -80,7 +110,7 @@ class SiteIssueController extends Controller
         $validated['status'] = 'open';
 
         $issue = SiteIssue::create($validated);
-        $issue->load('site', 'task', 'reportedBy');
+        $issue->load('site', 'factory', 'task', 'reportedBy');
 
         return response()->json([
             'success' => true,
@@ -91,7 +121,7 @@ class SiteIssueController extends Controller
 
     public function show(SiteIssue $issue)
     {
-        $issue->load(['site', 'task.project', 'reportedBy', 'assignedTo']);
+        $issue->load(['site', 'factory', 'task.project', 'reportedBy', 'assignedTo']);
 
         return response()->json([
             'success' => true,
@@ -111,7 +141,7 @@ class SiteIssueController extends Controller
         ]);
 
         $issue->update($validated);
-        $issue->load('site', 'task', 'reportedBy', 'assignedTo');
+        $issue->load('site', 'factory', 'task', 'reportedBy', 'assignedTo');
 
         return response()->json([
             'success' => true,
@@ -135,7 +165,7 @@ class SiteIssueController extends Controller
         }
 
         $issue->save();
-        $issue->load('site', 'task', 'reportedBy', 'assignedTo');
+        $issue->load('site', 'factory', 'task', 'reportedBy', 'assignedTo');
 
         return response()->json([
             'success' => true,
@@ -155,7 +185,7 @@ class SiteIssueController extends Controller
             'status' => 'in_progress',
         ]);
 
-        $issue->load('site', 'task', 'reportedBy', 'assignedTo');
+        $issue->load('site', 'factory', 'task', 'reportedBy', 'assignedTo');
 
         return response()->json([
             'success' => true,
@@ -177,12 +207,31 @@ class SiteIssueController extends Controller
     public function summary(Request $request)
     {
         $user = $request->user();
-        $siteId = $user->isSupervisor() ? $user->site_id : $request->site_id;
 
         $query = SiteIssue::query();
 
-        if ($siteId) {
-            $query->where('site_id', $siteId);
+        // Filter by work location
+        if ($user->isSupervisor() && $user->site_id) {
+            // Supervisor sees only their site
+            $query->where('site_id', $user->site_id);
+        } else {
+            // Filter by location parameters
+            if ($request->has('site_id')) {
+                $query->where('site_id', $request->site_id);
+            }
+
+            if ($request->has('factory_id')) {
+                $query->where('factory_id', $request->factory_id);
+            }
+
+            // Alternative format: location_type and location_id
+            if ($request->has('location_type') && $request->has('location_id')) {
+                if ($request->location_type === 'site') {
+                    $query->where('site_id', $request->location_id);
+                } elseif ($request->location_type === 'factory') {
+                    $query->where('factory_id', $request->location_id);
+                }
+            }
         }
 
         $total = $query->count();

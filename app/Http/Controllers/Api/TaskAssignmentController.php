@@ -32,6 +32,12 @@ class TaskAssignmentController extends Controller
             $query->where('employee_id', $request->employee_id);
         }
 
+        // Filter by work location (site or factory)
+        if ($request->has('location_type') && $request->has('location_id')) {
+            $query->where('location_type', $request->location_type)
+                  ->where('location_id', $request->location_id);
+        }
+
         // Filter active only
         if ($request->boolean('active_only', true)) {
             $query->whereNull('removed_at');
@@ -185,12 +191,18 @@ class TaskAssignmentController extends Controller
         ]);
     }
 
-    public function byTask(Task $task)
+    public function byTask(Request $request, Task $task)
     {
-        $assignments = $task->assignments()
-            ->with(['employee', 'workLogs'])
-            ->orderBy('assigned_at', 'desc')
-            ->get();
+        $query = $task->assignments()
+            ->with(['employee', 'workLogs']);
+
+        // Filter by work location if specified
+        if ($request->has('location_type') && $request->has('location_id')) {
+            $query->where('location_type', $request->location_type)
+                  ->where('location_id', $request->location_id);
+        }
+
+        $assignments = $query->orderBy('assigned_at', 'desc')->get();
 
         $active = $assignments->whereNull('removed_at');
         $removed = $assignments->whereNotNull('removed_at');

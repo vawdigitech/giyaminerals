@@ -29,8 +29,18 @@
                     </div>
                     <div class="card-body">
                         <dl class="row">
-                            <dt class="col-sm-3">Site:</dt>
-                            <dd class="col-sm-9">{{ $issue->site->name ?? '-' }}</dd>
+                            <dt class="col-sm-3">Location:</dt>
+                            <dd class="col-sm-9">
+                                @if($issue->site)
+                                    <i class="fas fa-map-marker-alt text-primary"></i> {{ $issue->site->name }}
+                                    <span class="badge badge-info ml-2">Site</span>
+                                @elseif($issue->factory)
+                                    <i class="fas fa-industry text-warning"></i> {{ $issue->factory->name }}
+                                    <span class="badge badge-warning ml-2">Factory</span>
+                                @else
+                                    -
+                                @endif
+                            </dd>
 
                             <dt class="col-sm-3">Category:</dt>
                             <dd class="col-sm-9">{{ ucfirst($issue->category) }}</dd>

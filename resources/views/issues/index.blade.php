@@ -1,8 +1,8 @@
 @extends('layouts.app')
-@section('page_title', 'Site Issues')
+@section('page_title', 'Issues')
 @section('breadcrumb')
     <li class="breadcrumb-item"><a href="{{ route('dashboard.index') }}">Dashboard</a></li>
-    <li class="breadcrumb-item active">Site Issues</li>
+    <li class="breadcrumb-item active">Issues</li>
 @endsection
 @section('content')
 <section class="content">
@@ -50,13 +50,30 @@
         <!-- Filters -->
         <div class="card card-outline card-primary mb-3">
             <div class="card-body">
-                <form method="GET" action="{{ route('issues.index') }}" class="row g-3">
+                <form method="GET" action="{{ route('issues.index') }}" class="row g-3" id="filterForm">
                     <div class="col-md-2">
+                        <select name="location_type" id="location_type" class="form-control">
+                            <option value="">All Locations</option>
+                            <option value="site" {{ request('location_type') == 'site' ? 'selected' : '' }}>Sites Only</option>
+                            <option value="factory" {{ request('location_type') == 'factory' ? 'selected' : '' }}>Factories Only</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2" id="site_filter" style="display: {{ request('location_type') == 'site' || (!request('location_type') && request('site_id')) ? 'block' : 'none' }}">
                         <select name="site_id" class="form-control">
                             <option value="">All Sites</option>
                             @foreach($sites as $site)
                                 <option value="{{ $site->id }}" {{ request('site_id') == $site->id ? 'selected' : '' }}>
                                     {{ $site->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-2" id="factory_filter" style="display: {{ request('location_type') == 'factory' || (!request('location_type') && request('factory_id')) ? 'block' : 'none' }}">
+                        <select name="factory_id" class="form-control">
+                            <option value="">All Factories</option>
+                            @foreach($factories as $factory)
+                                <option value="{{ $factory->id }}" {{ request('factory_id') == $factory->id ? 'selected' : '' }}>
+                                    {{ $factory->name }}
                                 </option>
                             @endforeach
                         </select>
@@ -110,7 +127,7 @@
                     <thead>
                         <tr>
                             <th>Title</th>
-                            <th>Site</th>
+                            <th>Location</th>
                             <th>Category</th>
                             <th>Priority</th>
                             <th>Status</th>
@@ -129,7 +146,17 @@
                                         <br><small class="text-muted">Task: {{ $issue->task->name }}</small>
                                     @endif
                                 </td>
-                                <td>{{ $issue->site->name ?? '-' }}</td>
+                                <td>
+                                    @if($issue->site)
+                                        <i class="fas fa-map-marker-alt text-primary"></i> {{ $issue->site->name }}
+                                        <small class="text-muted d-block">Site</small>
+                                    @elseif($issue->factory)
+                                        <i class="fas fa-industry text-warning"></i> {{ $issue->factory->name }}
+                                        <small class="text-muted d-block">Factory</small>
+                                    @else
+                                        -
+                                    @endif
+                                </td>
                                 <td>{{ ucfirst($issue->category) }}</td>
                                 <td>
                                     @php
@@ -179,5 +206,23 @@
     @elseif(session('error'))
         toastr.error(@json(session('error')));
     @endif
+
+    // Toggle location dropdowns based on type selection
+    document.getElementById('location_type').addEventListener('change', function() {
+        const locationType = this.value;
+        const siteFilter = document.getElementById('site_filter');
+        const factoryFilter = document.getElementById('factory_filter');
+
+        if (locationType === 'site') {
+            siteFilter.style.display = 'block';
+            factoryFilter.style.display = 'none';
+        } else if (locationType === 'factory') {
+            siteFilter.style.display = 'none';
+            factoryFilter.style.display = 'block';
+        } else {
+            siteFilter.style.display = 'none';
+            factoryFilter.style.display = 'none';
+        }
+    });
 </script>
 @endpush

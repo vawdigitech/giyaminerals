@@ -13,7 +13,7 @@ class TaskController extends Controller
     {
         $user = $request->user();
 
-        $query = Task::with(['project', 'site', 'factory', 'parent', 'activeAssignments.employee']);
+        $query = Task::with(['project', 'site', 'factory', 'parent', 'activeAssignments.employee', 'taskLocations']);
 
         // Supervisors only see tasks at their site
         if ($user->isSupervisor() && $user->site_id) {
@@ -82,8 +82,10 @@ class TaskController extends Controller
             'factory',
             'parent',
             'subtasks.activeAssignments.employee',
+            'subtasks.taskLocations',
             'activeAssignments.employee',
             'stockUsages.product',
+            'taskLocations',
         ]);
 
         return response()->json([
@@ -96,11 +98,41 @@ class TaskController extends Controller
     {
         $validated = $request->validate([
             'progress' => 'required|integer|min:0|max:100',
+            'location_type' => 'required|in:site,factory',
+            'location_id' => 'required|integer',
         ]);
 
-        $task->progress = $validated['progress'];
+        // Update progress for the specific location
+        $taskLocation = $task->taskLocations()
+            ->where('location_type', $validated['location_type'])
+            ->where('location_id', $validated['location_id'])
+            ->first();
+
+        if (!$taskLocation) {
+            // Create task location if it doesn't exist
+            $taskLocation = $task->taskLocations()->create([
+                'location_type' => $validated['location_type'],
+                'location_id' => $validated['location_id'],
+                'progress' => $validated['progress'],
+                'status' => 'pending',
+            ]);
+        } else {
+            $taskLocation->progress = $validated['progress'];
+        }
 
         // Update status based on progress
+        if ($taskLocation->progress >= 100) {
+            $taskLocation->status = 'completed';
+        } elseif ($taskLocation->progress > 0) {
+            $taskLocation->status = 'in_progress';
+        }
+
+        $taskLocation->save();
+
+        // Update task's overall progress from all locations
+        $task->progress = $task->getAggregatedProgress();
+
+        // Update task status and dates based on overall progress
         if ($task->progress >= 100) {
             $task->status = 'completed';
             $task->completed_date = now();
@@ -124,8 +156,13 @@ class TaskController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Task progress updated',
-            'data' => $task,
+            'message' => 'Task progress updated for location',
+            'data' => [
+                'task' => $task,
+                'location_progress' => $taskLocation->progress,
+                'location_status' => $taskLocation->status,
+                'overall_progress' => $task->progress,
+            ],
         ]);
     }
 
@@ -133,15 +170,62 @@ class TaskController extends Controller
     {
         $validated = $request->validate([
             'status' => 'required|in:pending,in_progress,completed,on_hold',
+            'location_type' => 'nullable|in:site,factory',
+            'location_id' => 'nullable|integer',
         ]);
 
-        $task->status = $validated['status'];
+        // If location is specified, update per-location status
+        if (isset($validated['location_type']) && isset($validated['location_id'])) {
+            $taskLocation = $task->taskLocations()
+                ->where('location_type', $validated['location_type'])
+                ->where('location_id', $validated['location_id'])
+                ->first();
 
-        if ($validated['status'] === 'completed') {
-            $task->progress = 100;
-            $task->completed_date = now();
-        } elseif ($validated['status'] === 'in_progress' && !$task->start_date) {
-            $task->start_date = now();
+            if (!$taskLocation) {
+                // Create task location if it doesn't exist
+                $taskLocation = $task->taskLocations()->create([
+                    'location_type' => $validated['location_type'],
+                    'location_id' => $validated['location_id'],
+                    'status' => $validated['status'],
+                    'progress' => 0,
+                ]);
+            } else {
+                $taskLocation->status = $validated['status'];
+            }
+
+            // Update progress based on status
+            if ($validated['status'] === 'completed') {
+                $taskLocation->progress = 100;
+            } elseif ($validated['status'] === 'in_progress' && $taskLocation->progress === 0) {
+                $taskLocation->progress = 1; // Set minimal progress
+            }
+
+            $taskLocation->save();
+
+            // Update task's overall progress and status from all locations
+            $task->progress = $task->getAggregatedProgress();
+
+            if ($task->progress >= 100) {
+                $task->status = 'completed';
+                $task->completed_date = now();
+            } elseif ($task->progress > 0) {
+                $task->status = 'in_progress';
+                if (!$task->start_date) {
+                    $task->start_date = now();
+                }
+            } else {
+                $task->status = $validated['status'];
+            }
+        } else {
+            // Legacy behavior: Update task status directly (for backward compatibility)
+            $task->status = $validated['status'];
+
+            if ($validated['status'] === 'completed') {
+                $task->progress = 100;
+                $task->completed_date = now();
+            } elseif ($validated['status'] === 'in_progress' && !$task->start_date) {
+                $task->start_date = now();
+            }
         }
 
         $task->save();
@@ -166,7 +250,7 @@ class TaskController extends Controller
     {
         // Return all tasks (both master and sub-tasks) for parent selection
         $tasks = $project->tasks()
-            ->with(['subtasks.activeAssignments.employee', 'activeAssignments.employee'])
+            ->with(['subtasks.activeAssignments.employee', 'subtasks.taskLocations', 'activeAssignments.employee', 'taskLocations'])
             ->orderBy('code')
             ->get();
 
@@ -268,7 +352,7 @@ class TaskController extends Controller
         $task->project->updateProgressFromTasks();
         $task->project->updateStatusFromTasks();
 
-        $task->load(['project.sites', 'project.factories', 'parent', 'activeAssignments.employee']);
+        $task->load(['project.sites', 'project.factories', 'parent', 'activeAssignments.employee', 'taskLocations']);
 
         return response()->json([
             'success' => true,

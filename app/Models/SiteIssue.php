@@ -8,6 +8,7 @@ class SiteIssue extends Model
 {
     protected $fillable = [
         'site_id',
+        'factory_id',
         'task_id',
         'title',
         'description',
@@ -31,9 +32,56 @@ class SiteIssue extends Model
         return $this->belongsTo(Site::class);
     }
 
+    public function factory()
+    {
+        return $this->belongsTo(Factory::class);
+    }
+
     public function task()
     {
         return $this->belongsTo(Task::class);
+    }
+
+    /**
+     * Get the location type (site or factory)
+     */
+    public function getLocationType()
+    {
+        if ($this->site_id) {
+            return 'site';
+        } elseif ($this->factory_id) {
+            return 'factory';
+        }
+        return null;
+    }
+
+    /**
+     * Get the location name
+     */
+    public function getLocationName()
+    {
+        if ($this->site_id && $this->site) {
+            return $this->site->name;
+        } elseif ($this->factory_id && $this->factory) {
+            return $this->factory->name;
+        }
+        return 'No Location';
+    }
+
+    /**
+     * Check if issue is at factory
+     */
+    public function isFactoryIssue()
+    {
+        return !is_null($this->factory_id);
+    }
+
+    /**
+     * Check if issue is at site
+     */
+    public function isSiteIssue()
+    {
+        return !is_null($this->site_id);
     }
 
     public function reportedBy()

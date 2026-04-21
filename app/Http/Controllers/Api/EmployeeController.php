@@ -37,6 +37,23 @@ class EmployeeController extends Controller
             $query->where('employees.designation_id', $request->designation_id);
         }
 
+        // Filter by checked-in location (employees who have attendance today at specific location)
+        if ($request->has('checked_in_at_location_type') && $request->has('checked_in_at_location_id')) {
+            $locationType = $request->checked_in_at_location_type;
+            $locationId = $request->checked_in_at_location_id;
+
+            $query->whereHas('todayAttendance', function ($q) use ($locationType, $locationId) {
+                // Check for active attendance (checked in but not checked out)
+                $q->whereNotNull('check_in_time');
+
+                if ($locationType === 'site') {
+                    $q->where('site_id', $locationId);
+                } elseif ($locationType === 'factory') {
+                    $q->where('factory_id', $locationId);
+                }
+            });
+        }
+
         // Search
         if ($request->has('search')) {
             $search = $request->search;

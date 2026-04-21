@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\SiteIssue;
 use App\Models\Site;
+use App\Models\Factory;
 use App\Models\User;
 use Illuminate\Http\Request;
 
@@ -12,11 +13,36 @@ class IssueController extends Controller
 {
     public function index(Request $request)
     {
-        $query = SiteIssue::with(['site', 'task', 'reportedBy', 'assignedTo']);
+        $query = SiteIssue::with(['site', 'factory', 'task', 'reportedBy', 'assignedTo']);
 
-        // Filter by site
-        if ($request->filled('site_id')) {
-            $query->where('site_id', $request->site_id);
+        // Build summary query with same filters
+        $summaryQuery = SiteIssue::query();
+
+        // Filter by location type
+        if ($request->filled('location_type')) {
+            if ($request->location_type === 'site' && $request->filled('site_id')) {
+                $query->where('site_id', $request->site_id);
+                $summaryQuery->where('site_id', $request->site_id);
+            } elseif ($request->location_type === 'factory' && $request->filled('factory_id')) {
+                $query->where('factory_id', $request->factory_id);
+                $summaryQuery->where('factory_id', $request->factory_id);
+            } elseif ($request->location_type === 'site') {
+                $query->whereNotNull('site_id');
+                $summaryQuery->whereNotNull('site_id');
+            } elseif ($request->location_type === 'factory') {
+                $query->whereNotNull('factory_id');
+                $summaryQuery->whereNotNull('factory_id');
+            }
+        } else {
+            // Legacy support: filter by site_id only
+            if ($request->filled('site_id')) {
+                $query->where('site_id', $request->site_id);
+                $summaryQuery->where('site_id', $request->site_id);
+            }
+            if ($request->filled('factory_id')) {
+                $query->where('factory_id', $request->factory_id);
+                $summaryQuery->where('factory_id', $request->factory_id);
+            }
         }
 
         // Filter by status
@@ -45,14 +71,15 @@ class IssueController extends Controller
 
         $issues = $query->orderBy('created_at', 'desc')->paginate(15);
         $sites = Site::orderBy('name')->get();
+        $factories = Factory::orderBy('name')->get();
 
-        // Summary statistics
+        // Summary statistics based on filters
         $summary = [
-            'total' => SiteIssue::count(),
-            'open' => SiteIssue::where('status', 'open')->count(),
-            'in_progress' => SiteIssue::where('status', 'in_progress')->count(),
-            'resolved' => SiteIssue::where('status', 'resolved')->count(),
-            'critical_pending' => SiteIssue::where('priority', 'critical')
+            'total' => (clone $summaryQuery)->count(),
+            'open' => (clone $summaryQuery)->where('status', 'open')->count(),
+            'in_progress' => (clone $summaryQuery)->where('status', 'in_progress')->count(),
+            'resolved' => (clone $summaryQuery)->where('status', 'resolved')->count(),
+            'critical_pending' => (clone $summaryQuery)->where('priority', 'critical')
                 ->whereIn('status', ['open', 'in_progress'])->count(),
         ];
 
@@ -66,12 +93,12 @@ class IssueController extends Controller
             'other' => 'Other',
         ];
 
-        return view('issues.index', compact('issues', 'sites', 'summary', 'categories'));
+        return view('issues.index', compact('issues', 'sites', 'factories', 'summary', 'categories'));
     }
 
     public function show(SiteIssue $issue)
     {
-        $issue->load(['site', 'task.project', 'reportedBy', 'assignedTo']);
+        $issue->load(['site', 'factory', 'task.project', 'reportedBy', 'assignedTo']);
         $supervisors = User::role('supervisor')->orderBy('name')->get();
 
         return view('issues.show', compact('issue', 'supervisors'));
