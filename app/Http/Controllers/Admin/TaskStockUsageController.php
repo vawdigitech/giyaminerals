@@ -223,13 +223,20 @@ class TaskStockUsageController extends Controller
             $sourceStock = $usage->stock;
             $project = $task->project;
 
+            // Check if returning to the same location or a different one
+            $isSameLocation = (
+                $usage->location_type === $validated['destination_type'] &&
+                $usage->location_id == $validated['destination_id']
+            );
+
             // Create transfer record for the return
+            // Use the location from the TaskStockUsage record
             Transfer::create([
                 'product_id' => $usage->product_id,
                 'task_id' => $task->id,
                 'task_stock_usage_id' => $usage->id,
-                'from_type' => 'site',
-                'from_id' => $task->site_id,
+                'from_type' => $usage->location_type,
+                'from_id' => $usage->location_id,
                 'to_type' => $validated['destination_type'],
                 'to_id' => $validated['destination_id'],
                 'quantity' => $validated['quantity_to_return'],
@@ -239,24 +246,34 @@ class TaskStockUsageController extends Controller
                 'created_by' => auth()->id(),
             ]);
 
-            // Update source stock (decrease transferred_quantity since material is coming back)
-            if ($sourceStock) {
-                $sourceStock->decrement('transferred_quantity', $validated['quantity_to_return']);
-                $sourceStock->update(['last_updated_at' => now()]);
-            }
+            if ($isSameLocation) {
+                // Returning to the same location - only decrease transferred_quantity
+                // This de-allocates the material from the task back to available stock
+                if ($sourceStock) {
+                    $sourceStock->transferred_quantity -= $validated['quantity_to_return'];
+                    $sourceStock->last_updated_at = now();
+                    $sourceStock->save(); // This triggers the saving event to recalculate balance
+                }
+            } else {
+                // Returning to a different location
+                // Material physically moves, so it stays as "transferred" from source
+                // and is "received" at destination
+                $destinationStock = Stock::firstOrCreate([
+                    'product_id' => $usage->product_id,
+                    'location_type' => $validated['destination_type'],
+                    'location_id' => $validated['destination_id'],
+                ], [
+                    'received_quantity' => 0,
+                    'transferred_quantity' => 0,
+                    'last_updated_at' => now(),
+                ]);
+                $destinationStock->received_quantity += $validated['quantity_to_return'];
+                $destinationStock->last_updated_at = now();
+                $destinationStock->save(); // This triggers the saving event to recalculate balance
 
-            // Update or create destination stock
-            $destinationStock = Stock::firstOrCreate([
-                'product_id' => $usage->product_id,
-                'location_type' => $validated['destination_type'],
-                'location_id' => $validated['destination_id'],
-            ], [
-                'received_quantity' => 0,
-                'transferred_quantity' => 0,
-                'last_updated_at' => now(),
-            ]);
-            $destinationStock->increment('received_quantity', $validated['quantity_to_return']);
-            $destinationStock->update(['last_updated_at' => now()]);
+                // Note: We don't decrease source transferred_quantity because the material
+                // actually left the location (it was allocated to task, now it's physically moved out)
+            }
 
             // Update or delete the TaskStockUsage
             $remainingQuantity = $usage->quantity - $validated['quantity_to_return'];

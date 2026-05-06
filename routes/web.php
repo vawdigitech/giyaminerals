@@ -102,9 +102,9 @@ Route::middleware('auth')->group(function () {
     // Sites Management
     Route::middleware('permission:sites.view')->group(function () {
         Route::resource('sites', SiteController::class)->only(['index']);
-        Route::get('sites/{site}/tasks', [StockController::class, 'getTasksBySite'])->name('sites.tasks');
-        Route::get('tasks/{task}/subtasks', [StockController::class, 'getSubtasks'])->name('tasks.subtasks');
-        Route::get('tasks/{task}/locations', [StockController::class, 'getTaskLocations'])->name('tasks.locations');
+        Route::get('sites/{site}/tasks', [TransferController::class, 'getTasksBySite'])->name('sites.tasks');
+        Route::get('tasks/{task}/subtasks', [TransferController::class, 'getSubtasks'])->name('tasks.subtasks');
+        Route::get('tasks/{task}/locations', [TransferController::class, 'getTaskLocations'])->name('tasks.locations');
     });
     Route::middleware('permission:sites.create')->resource('sites', SiteController::class)->only(['create', 'store']);
     Route::middleware('permission:sites.view')->resource('sites', SiteController::class)->only(['show']);

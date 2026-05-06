@@ -139,12 +139,14 @@
 
     function populateToSelect(selectedFrom) {
         clearSelect(toSelect, 'Select Destination');
-        allLocations
-            .filter(loc => loc.value !== selectedFrom)
-            .forEach(loc => {
-                const option = new Option(loc.label, loc.value);
-                toSelect.add(option);
-            });
+        allLocations.forEach(loc => {
+            // Allow same location for site-to-site task assignments
+            const option = new Option(loc.label, loc.value);
+            if (loc.value === selectedFrom) {
+                option.text = loc.label + ' (Same location - Task assignment)';
+            }
+            toSelect.add(option);
+        });
         if (oldTo) {
             toSelect.value = oldTo;
         }
@@ -174,6 +176,10 @@
     fromSelect.addEventListener('change', () => {
         const selectedFrom = fromSelect.value;
         populateToSelect(selectedFrom);
+        // Trigger toSelect change if a value is already selected
+        if (toSelect.value) {
+            toSelect.dispatchEvent(new Event('change'));
+        }
     });
 
     // Task and Work Location handling
@@ -188,18 +194,36 @@
     // Handle destination change - show task section if destination is a site
     toSelect.addEventListener('change', function() {
         const toValue = toSelect.value;
+        const fromValue = fromSelect.value;
+
         if (!toValue) {
             taskSection.style.display = 'none';
             return;
         }
 
         const [toType, toId] = toValue.split(':');
+
+        // Show task section if:
+        // 1. Destination is a site, OR
+        // 2. From and To are the same location (task assignment)
         if (toType === 'site') {
             taskSection.style.display = 'block';
             fetchTasksBySite(toId);
+
+            // If same location, make task required
+            if (fromValue === toValue) {
+                document.getElementById('taskSection').querySelector('.alert').innerHTML =
+                    '<i class="fas fa-info-circle"></i> <strong>Same location transfer:</strong> You must assign this to a specific task since you\'re not physically moving the stock.';
+                masterTaskSelect.required = true;
+            } else {
+                document.getElementById('taskSection').querySelector('.alert').innerHTML =
+                    '<i class="fas fa-info-circle"></i> You can optionally assign this transfer to a specific task. This will automatically create a material usage record.';
+                masterTaskSelect.required = false;
+            }
         } else {
             taskSection.style.display = 'none';
             resetTaskFields();
+            masterTaskSelect.required = false;
         }
     });
 
@@ -319,6 +343,21 @@
     if (oldProductId) {
         productSelect.dispatchEvent(new Event('change'));
     }
+
+    // Form validation before submit
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const fromValue = fromSelect.value;
+        const toValue = toSelect.value;
+        const taskId = taskIdInput.value;
+
+        if (fromValue && toValue && fromValue === toValue) {
+            if (!taskId) {
+                e.preventDefault();
+                toastr.error('Task assignment is required when transferring within the same location.');
+                return false;
+            }
+        }
+    });
 
     toastr.options = {
         "positionClass": "toast-top-right",

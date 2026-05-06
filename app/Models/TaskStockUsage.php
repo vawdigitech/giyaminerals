@@ -38,7 +38,8 @@ class TaskStockUsage extends Model
             // Deduct from stock (increase transferred_quantity)
             $stock = $usage->stock;
             $stock->transferred_quantity += $usage->quantity;
-            $stock->save();
+            $stock->last_updated_at = now();
+            $stock->save(); // Triggers saving event to recalculate balance
 
             // Recalculate task costs
             $usage->task->recalculateCosts();
@@ -48,7 +49,8 @@ class TaskStockUsage extends Model
             // Restore stock (decrease transferred_quantity)
             $stock = $usage->stock;
             $stock->transferred_quantity -= $usage->quantity;
-            $stock->save();
+            $stock->last_updated_at = now();
+            $stock->save(); // Triggers saving event to recalculate balance
 
             // Recalculate task costs
             $usage->task->recalculateCosts();

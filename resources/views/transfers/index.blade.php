@@ -44,6 +44,7 @@
                     <th>Category</th>
                     <th>From</th>
                     <th>To</th>
+                    <th>Task</th>
                     <th>Qty</th>
                 </tr>
             </thead>
@@ -51,13 +52,21 @@
                 @foreach($transfers as $t)
                     <tr>
                         <td>{{ \Carbon\Carbon::parse($t->transfer_date)->timezone('Asia/Kolkata')->format('Y-m-d H:i') }}</td>
-                        </td>
                         <td>{{ $t->product->name }}</td>
-                        <td>{{ $t->product->category->name }}</td>
+                        <td>{{ $t->product->category->name ?? '-' }}</td>
                         <td>{{ $t->from_type === 'warehouse' ? 'W' : 'S' }}
                             - {{ $t->from_name }}</td>
                         <td>{{ $t->to_type === 'warehouse' ? 'W' : 'S' }}
                             - {{ $t->to_name }}</td>
+                        <td>
+                            @if($t->task)
+                                <a href="{{ route('tasks.show', $t->task) }}" class="text-primary">
+                                    [{{ $t->task->code }}] {{ Str::limit($t->task->name, 30) }}
+                                </a>
+                            @else
+                                <span class="text-muted">-</span>
+                            @endif
+                        </td>
                         <td>{{ $t->quantity }}</td>
                     </tr>
                 @endforeach
@@ -75,6 +84,7 @@
                 autoWidth: false,
                 lengthChange: true,
                 pageLength: 10,
+                order: [[0, 'desc']] // Sort by Date column (index 0) in descending order
             }).buttons().container().appendTo('#transferTable_wrapper .col-md-6:eq(0)');
         });
 
