@@ -779,10 +779,13 @@ class AttendanceReportController extends Controller
     {
         $employeeName = $attendance->employee->name;
         $date = $attendance->date->format('Y-m-d');
+        $indexRoute = $attendance->isFactoryAttendance()
+            ? 'factory-attendance.index'
+            : 'site-attendance.index';
 
         $attendance->delete();
 
-        return redirect()->route('attendance.index')
+        return redirect()->route($indexRoute)
             ->with('success', "Attendance record for {$employeeName} on {$date} deleted successfully.");
     }
 
