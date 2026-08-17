@@ -17,8 +17,13 @@ class EmployeeController extends Controller
         // Allow fetching all employees (bypass site restriction) when all=true
         $fetchAll = $request->boolean('all', false);
 
-        // Supervisors only see employees at their site (unless all=true for search)
-        if (!$fetchAll && $user->isSupervisor() && $user->site_id) {
+        $hasCheckedInLocationFilter =
+            $request->filled('checked_in_at_location_type')
+            && $request->filled('checked_in_at_location_id');
+
+        // Supervisors only see employees at their site (unless all=true for search,
+        // or filtering by who is checked in at an explicitly selected work location)
+        if (!$fetchAll && !$hasCheckedInLocationFilter && $user->isSupervisor() && $user->site_id) {
             $query->where('employees.site_id', $user->site_id);
         }
 

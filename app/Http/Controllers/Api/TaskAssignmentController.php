@@ -57,8 +57,8 @@ class TaskAssignmentController extends Controller
             'task_id' => 'required|exists:tasks,id',
             'employee_ids' => 'required|array|min:1',
             'employee_ids.*' => 'exists:employees,id',
-            'location_type' => 'nullable|in:site,factory',
-            'location_id' => 'nullable|integer',
+            'location_type' => 'required|in:site,factory',
+            'location_id' => 'required|integer',
             'notes' => 'nullable|string',
         ]);
 
@@ -91,16 +91,9 @@ class TaskAssignmentController extends Controller
 
             $employee = Employee::findOrFail($employeeId);
 
-            // Determine location from request or task's first location
-            $location_type = $validated['location_type'] ?? null;
-            $location_id = $validated['location_id'] ?? null;
-
-            // If no location specified, use first location from task
-            if (!$location_type && $task->taskLocations->count() > 0) {
-                $firstLocation = $task->taskLocations->first();
-                $location_type = $firstLocation->location_type;
-                $location_id = $firstLocation->location_id;
-            }
+            // Always use the location selected in the app (never fall back to another site)
+            $location_type = $validated['location_type'];
+            $location_id = $validated['location_id'];
 
             // Get today's attendance to determine appropriate rate
             $todayAttendance = $employee->todayAttendance()->first();

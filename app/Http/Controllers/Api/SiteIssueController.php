@@ -14,8 +14,13 @@ class SiteIssueController extends Controller
 
         $query = SiteIssue::with(['site', 'factory', 'task', 'reportedBy', 'assignedTo']);
 
-        // Supervisors only see issues at their site
-        if ($user->isSupervisor() && $user->site_id) {
+        $hasExplicitLocation =
+            $request->filled('site_id')
+            || $request->filled('factory_id')
+            || ($request->filled('location_type') && $request->filled('location_id'));
+
+        // Supervisors default to their assigned site unless the app sends an explicit location
+        if (!$hasExplicitLocation && $user->isSupervisor() && $user->site_id) {
             $query->where('site_id', $user->site_id);
         }
 
@@ -210,12 +215,15 @@ class SiteIssueController extends Controller
 
         $query = SiteIssue::query();
 
-        // Filter by work location
-        if ($user->isSupervisor() && $user->site_id) {
-            // Supervisor sees only their site
+        $hasExplicitLocation =
+            $request->filled('site_id')
+            || $request->filled('factory_id')
+            || ($request->filled('location_type') && $request->filled('location_id'));
+
+        // Supervisors default to their assigned site unless the app sends an explicit location
+        if (!$hasExplicitLocation && $user->isSupervisor() && $user->site_id) {
             $query->where('site_id', $user->site_id);
         } else {
-            // Filter by location parameters
             if ($request->has('site_id')) {
                 $query->where('site_id', $request->site_id);
             }
