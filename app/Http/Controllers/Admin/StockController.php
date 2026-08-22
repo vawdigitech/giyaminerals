@@ -107,4 +107,145 @@ class StockController extends Controller
             ->get();
         return view('stocks.entries', compact('entries'));
     }
+
+    public function edit(StockEntry $stockEntry)
+    {
+        return view('stocks.edit', [
+            'stockEntry' => $stockEntry,
+            'products' => Product::with('category')->get(),
+            'warehouses' => Warehouse::all(),
+            'sites' => Site::all(),
+        ]);
+    }
+
+    public function update(Request $request, StockEntry $stockEntry)
+    {
+        $data = $request->validate([
+            'product_id' => 'required|exists:products,id',
+            'location' => 'required|string',
+            'quantity' => 'required|integer|min:1',
+            'entry_date' => 'required|date',
+            'reference' => 'nullable|string',
+        ]);
+
+        [$type, $id] = explode(':', $data['location']);
+
+        DB::beginTransaction();
+        try {
+            $oldProductId = $stockEntry->product_id;
+            $oldLocationType = $stockEntry->location_type;
+            $oldLocationId = $stockEntry->location_id;
+            $oldQuantity = $stockEntry->quantity;
+
+            $stockKeyChanged = $oldProductId != $data['product_id']
+                || $oldLocationType != $type
+                || (int) $oldLocationId != (int) $id;
+            $quantityChanged = $oldQuantity != $data['quantity'];
+
+            if ($stockKeyChanged || $quantityChanged) {
+                $sameStockKey = !$stockKeyChanged;
+
+                if ($sameStockKey) {
+                    $stock = $this->findStock($oldProductId, $oldLocationType, $oldLocationId);
+                    if (!$stock) {
+                        throw new \RuntimeException('Stock record not found for this entry.');
+                    }
+
+                    $delta = $data['quantity'] - $oldQuantity;
+                    $newReceived = $stock->received_quantity + $delta;
+                    if ($newReceived - $stock->transferred_quantity < 0) {
+                        throw new \RuntimeException('Cannot update: quantity would fall below already issued/transferred stock.');
+                    }
+
+                    $stock->received_quantity = $newReceived;
+                    $stock->last_updated_at = now();
+                    $stock->save();
+                } else {
+                    $oldStock = $this->findStock($oldProductId, $oldLocationType, $oldLocationId);
+                    if ($oldStock) {
+                        $newReceived = $oldStock->received_quantity - $oldQuantity;
+                        if ($newReceived - $oldStock->transferred_quantity < 0) {
+                            throw new \RuntimeException('Cannot update: reversing this entry would make stock balance negative.');
+                        }
+                        $oldStock->received_quantity = $newReceived;
+                        $oldStock->last_updated_at = now();
+                        $oldStock->save();
+                    }
+
+                    $newStock = Stock::firstOrCreate([
+                        'product_id' => $data['product_id'],
+                        'location_type' => $type,
+                        'location_id' => $id,
+                    ], [
+                        'received_quantity' => 0,
+                        'transferred_quantity' => 0,
+                        'last_updated_at' => now(),
+                    ]);
+
+                    $newStock->received_quantity += $data['quantity'];
+                    $newStock->last_updated_at = now();
+                    $newStock->save();
+                }
+            }
+
+            $stockEntry->update([
+                'product_id' => $data['product_id'],
+                'location_type' => $type,
+                'location_id' => $id,
+                'quantity' => $data['quantity'],
+                'entry_date' => $data['entry_date'],
+                'reference' => $data['reference'],
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('stocks.entries')->with('success', 'Stock entry updated successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return redirect()->back()->with('error', $e->getMessage())->withInput();
+        }
+    }
+
+    public function destroy(StockEntry $stockEntry)
+    {
+        DB::beginTransaction();
+        try {
+            $stock = $this->findStock(
+                $stockEntry->product_id,
+                $stockEntry->location_type,
+                $stockEntry->location_id
+            );
+
+            if ($stock) {
+                $newReceived = $stock->received_quantity - $stockEntry->quantity;
+                if ($newReceived - $stock->transferred_quantity < 0) {
+                    throw new \RuntimeException('Cannot delete: stock from this entry has already been issued or transferred.');
+                }
+
+                $stock->received_quantity = $newReceived;
+                $stock->last_updated_at = now();
+                $stock->save();
+            }
+
+            $stockEntry->delete();
+
+            DB::commit();
+
+            return redirect()->route('stocks.entries')->with('success', 'Stock entry deleted successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return redirect()->route('stocks.entries')->with('error', $e->getMessage());
+        }
+    }
+
+    private function findStock(int $productId, string $locationType, int $locationId): ?Stock
+    {
+        return Stock::where([
+            'product_id' => $productId,
+            'location_type' => $locationType,
+            'location_id' => $locationId,
+        ])->first();
+    }
 }

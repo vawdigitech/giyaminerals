@@ -81,6 +81,13 @@ Route::middleware('auth')->group(function () {
         Route::get('stocks/entry', [StockController::class, 'create'])->name('stocks.entry');
         Route::post('stocks/entry', [StockController::class, 'store'])->name('stocks.store');
     });
+    Route::middleware('permission:inventory.edit')->group(function () {
+        Route::get('stocks/entries/{stockEntry}/edit', [StockController::class, 'edit'])->name('stocks.entries.edit');
+        Route::put('stocks/entries/{stockEntry}', [StockController::class, 'update'])->name('stocks.entries.update');
+    });
+    Route::middleware('permission:inventory.delete')->group(function () {
+        Route::delete('stocks/entries/{stockEntry}', [StockController::class, 'destroy'])->name('stocks.entries.destroy');
+    });
 
     Route::middleware('permission:inventory.view')->group(function () {
         Route::resource('products', ProductController::class)->only(['index']);
