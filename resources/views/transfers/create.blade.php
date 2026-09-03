@@ -73,7 +73,8 @@
 
             <div class="form-group mt-2">
                 <label>Quantity</label>
-                <input type="number" name="quantity" class="form-control" required value="{{ old('quantity') }}">
+                <input type="number" name="quantity" class="form-control" required
+                    step="0.001" min="0.001" value="{{ old('quantity') }}">
             </div>
 
             <div class="form-group">

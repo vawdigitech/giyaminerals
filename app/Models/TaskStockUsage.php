@@ -21,7 +21,7 @@ class TaskStockUsage extends Model
     ];
 
     protected $casts = [
-        'quantity' => 'decimal:2',
+        'quantity' => 'decimal:3',
         'unit_price' => 'decimal:2',
         'total_cost' => 'decimal:2',
         'used_at' => 'datetime',
@@ -31,13 +31,13 @@ class TaskStockUsage extends Model
     {
         static::creating(function ($usage) {
             // Calculate total cost
-            $usage->total_cost = $usage->quantity * $usage->unit_price;
+            $usage->total_cost = round((float) $usage->quantity * (float) $usage->unit_price, 2);
         });
 
         static::created(function ($usage) {
             // Deduct from stock (increase transferred_quantity)
             $stock = $usage->stock;
-            $stock->transferred_quantity += $usage->quantity;
+            $stock->transferred_quantity = round((float) $stock->transferred_quantity + (float) $usage->quantity, 3);
             $stock->last_updated_at = now();
             $stock->save(); // Triggers saving event to recalculate balance
 
@@ -48,7 +48,7 @@ class TaskStockUsage extends Model
         static::deleted(function ($usage) {
             // Restore stock (decrease transferred_quantity)
             $stock = $usage->stock;
-            $stock->transferred_quantity -= $usage->quantity;
+            $stock->transferred_quantity = round((float) $stock->transferred_quantity - (float) $usage->quantity, 3);
             $stock->last_updated_at = now();
             $stock->save(); // Triggers saving event to recalculate balance
 

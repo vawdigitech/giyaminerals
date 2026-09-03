@@ -54,7 +54,7 @@ class StockController extends Controller
         $data = $request->validate([
             'product_id' => 'required|exists:products,id',
             'location' => 'required|string',
-            'quantity' => 'required|integer|min:1',
+            'quantity' => 'required|numeric|min:0.001',
             'entry_date' => 'required|date',
             'reference' => 'nullable|string'
         ]);
@@ -87,7 +87,7 @@ class StockController extends Controller
                 'last_updated_at' => now()
             ]);
 
-            $stock->received_quantity += $data['quantity'];
+            $stock->received_quantity = round((float) $stock->received_quantity + (float) $data['quantity'], 3);
             $stock->last_updated_at = now();
             $stock->save(); // Triggers saving event to recalculate balance
 
@@ -123,7 +123,7 @@ class StockController extends Controller
         $data = $request->validate([
             'product_id' => 'required|exists:products,id',
             'location' => 'required|string',
-            'quantity' => 'required|integer|min:1',
+            'quantity' => 'required|numeric|min:0.001',
             'entry_date' => 'required|date',
             'reference' => 'nullable|string',
         ]);
@@ -151,9 +151,9 @@ class StockController extends Controller
                         throw new \RuntimeException('Stock record not found for this entry.');
                     }
 
-                    $delta = $data['quantity'] - $oldQuantity;
-                    $newReceived = $stock->received_quantity + $delta;
-                    if ($newReceived - $stock->transferred_quantity < 0) {
+                    $delta = (float) $data['quantity'] - (float) $oldQuantity;
+                    $newReceived = round((float) $stock->received_quantity + $delta, 3);
+                    if (round($newReceived - (float) $stock->transferred_quantity, 3) < 0) {
                         throw new \RuntimeException('Cannot update: quantity would fall below already issued/transferred stock.');
                     }
 
@@ -163,8 +163,8 @@ class StockController extends Controller
                 } else {
                     $oldStock = $this->findStock($oldProductId, $oldLocationType, $oldLocationId);
                     if ($oldStock) {
-                        $newReceived = $oldStock->received_quantity - $oldQuantity;
-                        if ($newReceived - $oldStock->transferred_quantity < 0) {
+                        $newReceived = round((float) $oldStock->received_quantity - (float) $oldQuantity, 3);
+                        if (round($newReceived - (float) $oldStock->transferred_quantity, 3) < 0) {
                             throw new \RuntimeException('Cannot update: reversing this entry would make stock balance negative.');
                         }
                         $oldStock->received_quantity = $newReceived;
@@ -182,7 +182,7 @@ class StockController extends Controller
                         'last_updated_at' => now(),
                     ]);
 
-                    $newStock->received_quantity += $data['quantity'];
+                    $newStock->received_quantity = round((float) $newStock->received_quantity + (float) $data['quantity'], 3);
                     $newStock->last_updated_at = now();
                     $newStock->save();
                 }
@@ -218,8 +218,8 @@ class StockController extends Controller
             );
 
             if ($stock) {
-                $newReceived = $stock->received_quantity - $stockEntry->quantity;
-                if ($newReceived - $stock->transferred_quantity < 0) {
+                $newReceived = round((float) $stock->received_quantity - (float) $stockEntry->quantity, 3);
+                if (round($newReceived - (float) $stock->transferred_quantity, 3) < 0) {
                     throw new \RuntimeException('Cannot delete: stock from this entry has already been issued or transferred.');
                 }
 

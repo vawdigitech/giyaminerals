@@ -17,7 +17,11 @@ class SiteStock extends Model
     protected $fillable = [
         'site_id',
         'product_id',
-        'quantity'   
+        'quantity'
+    ];
+
+    protected $casts = [
+        'quantity' => 'decimal:3',
     ];
 
     public function product()

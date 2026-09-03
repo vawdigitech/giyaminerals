@@ -46,7 +46,7 @@ class TaskStockUsageController extends Controller
             'task_id' => 'required|exists:tasks,id',
             'product_id' => 'required|exists:products,id',
             'stock_id' => 'required|exists:stocks,id',
-            'quantity' => 'required|numeric|min:0.01',
+            'quantity' => 'required|numeric|min:0.001',
             'unit_price' => 'required|numeric|min:0',
             'notes' => 'nullable|string',
         ]);
@@ -63,7 +63,7 @@ class TaskStockUsageController extends Controller
         }
 
         // Check if sufficient stock available
-        if ($stock->balance < $validated['quantity']) {
+        if ((float) $stock->balance < (float) $validated['quantity']) {
             return response()->json([
                 'success' => false,
                 'message' => 'Insufficient stock. Available: ' . $stock->balance,

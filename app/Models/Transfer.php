@@ -31,6 +31,11 @@ class Transfer extends Model
         'created_by'
     ];
 
+    protected $casts = [
+        'quantity' => 'decimal:3',
+        'transfer_date' => 'date',
+    ];
+
     public function product()
     {
         return $this->belongsTo(Product::class, 'product_id', 'id');

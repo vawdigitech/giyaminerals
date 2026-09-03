@@ -45,7 +45,7 @@ class TransferController extends Controller
             'product_id' => 'required|exists:products,id',
             'from' => 'required|string',
             'to' => 'required|string',
-            'quantity' => 'required|integer|min:1',
+            'quantity' => 'required|numeric|min:0.001',
             'transfer_date' => 'required|date',
             'task_id' => 'nullable|exists:tasks,id',
             'work_location' => 'nullable|required_with:task_id|string'
@@ -81,7 +81,7 @@ class TransferController extends Controller
             'location_id' => $from_id
         ])->first();
 
-        if (!$stockFrom || $stockFrom->balance < $data['quantity']) {
+        if (!$stockFrom || (float) $stockFrom->balance < (float) $data['quantity']) {
             return back()->withInput()->with('error', 'Insufficient stock in source.');
         }
 
@@ -91,13 +91,13 @@ class TransferController extends Controller
         try {
             if ($isSameLocation) {
                 // Same location - just allocate to task, don't move stock
-                $stockFrom->transferred_quantity += $data['quantity'];
+                $stockFrom->transferred_quantity = round((float) $stockFrom->transferred_quantity + (float) $data['quantity'], 3);
                 $stockFrom->last_updated_at = now();
                 $stockFrom->save(); // Triggers saving event to recalculate balance
                 $stockTo = $stockFrom; // Reference the same stock record
             } else {
                 // Different locations - normal transfer
-                $stockFrom->transferred_quantity += $data['quantity'];
+                $stockFrom->transferred_quantity = round((float) $stockFrom->transferred_quantity + (float) $data['quantity'], 3);
                 $stockFrom->last_updated_at = now();
                 $stockFrom->save(); // Triggers saving event to recalculate balance
 
@@ -110,7 +110,7 @@ class TransferController extends Controller
                     'transferred_quantity' => 0,
                     'last_updated_at' => now()
                 ]);
-                $stockTo->received_quantity += $data['quantity'];
+                $stockTo->received_quantity = round((float) $stockTo->received_quantity + (float) $data['quantity'], 3);
                 $stockTo->last_updated_at = now();
                 $stockTo->save(); // Triggers saving event to recalculate balance
             }
@@ -174,7 +174,7 @@ class TransferController extends Controller
         $sites = Site::pluck('name', 'id');
 
         $locations = $stocks->map(function ($stock) use ($warehouses, $sites) {
-            $balance = $stock->received_quantity - $stock->transferred_quantity;
+            $balance = round((float) $stock->received_quantity - (float) $stock->transferred_quantity, 3);
 
             $name = $stock->location_type === 'warehouse'
                 ? $warehouses[$stock->location_id] ?? null

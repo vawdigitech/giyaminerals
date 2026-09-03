@@ -47,7 +47,7 @@
             <div class="form-group">
                 <label>Quantity</label>
                 <input type="number" name="quantity" class="form-control" required
-                    value="{{ old('quantity') }}">
+                    step="0.001" min="0.001" value="{{ old('quantity') }}">
             </div>
             <div class="form-group">
                 <label>Entry Date</label>

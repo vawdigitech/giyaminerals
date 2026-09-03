@@ -16,6 +16,11 @@ class StockEntry extends Model
      */
     protected $fillable = ['product_id','location_type','location_id','quantity','entry_date','reference','created_by'];
 
+    protected $casts = [
+        'quantity' => 'decimal:3',
+        'entry_date' => 'date',
+    ];
+
     public function product()
     {
         return $this->belongsTo(Product::class, 'product_id', 'id');

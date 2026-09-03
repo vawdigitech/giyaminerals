@@ -336,8 +336,8 @@
                             <div class="form-group">
                                 <label for="materialQty">Quantity <span class="text-danger">*</span></label>
                                 <div class="input-group">
-                                    <input type="number" step="0.01" min="0.01" class="form-control"
-                                        id="materialQty" name="quantity" required placeholder="0.00">
+                                    <input type="number" step="0.001" min="0.001" class="form-control"
+                                        id="materialQty" name="quantity" required placeholder="0.000">
                                     <div class="input-group-append">
                                         <span class="input-group-text" id="unitLabel">-</span>
                                     </div>

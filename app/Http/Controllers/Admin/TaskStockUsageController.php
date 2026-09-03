@@ -58,7 +58,7 @@ class TaskStockUsageController extends Controller
     {
         $validated = $request->validate([
             'stock_id' => 'required|exists:stocks,id',
-            'quantity' => 'required|numeric|min:0.01',
+            'quantity' => 'required|numeric|min:0.001',
             'unit_price' => 'required|numeric|min:0',
             'notes' => 'nullable|string|max:500',
         ]);
@@ -81,7 +81,7 @@ class TaskStockUsageController extends Controller
         }
 
         // Check if sufficient stock available
-        if ($stock->balance < $validated['quantity']) {
+        if ((float) $stock->balance < (float) $validated['quantity']) {
             return response()->json([
                 'success' => false,
                 'message' => 'Insufficient stock. Available: ' . $stock->balance . ' ' . ($stock->product->unit ?? ''),
@@ -190,7 +190,7 @@ class TaskStockUsageController extends Controller
         }
 
         $validated = $request->validate([
-            'quantity_to_return' => 'required|numeric|min:0.01',
+            'quantity_to_return' => 'required|numeric|min:0.001',
             'destination_type' => 'required|in:warehouse,site',
             'destination_id' => 'required|integer',
             'notes' => 'nullable|string|max:500',
@@ -250,7 +250,10 @@ class TaskStockUsageController extends Controller
                 // Returning to the same location - only decrease transferred_quantity
                 // This de-allocates the material from the task back to available stock
                 if ($sourceStock) {
-                    $sourceStock->transferred_quantity -= $validated['quantity_to_return'];
+                    $sourceStock->transferred_quantity = round(
+                        (float) $sourceStock->transferred_quantity - (float) $validated['quantity_to_return'],
+                        3
+                    );
                     $sourceStock->last_updated_at = now();
                     $sourceStock->save(); // This triggers the saving event to recalculate balance
                 }
@@ -267,7 +270,10 @@ class TaskStockUsageController extends Controller
                     'transferred_quantity' => 0,
                     'last_updated_at' => now(),
                 ]);
-                $destinationStock->received_quantity += $validated['quantity_to_return'];
+                $destinationStock->received_quantity = round(
+                    (float) $destinationStock->received_quantity + (float) $validated['quantity_to_return'],
+                    3
+                );
                 $destinationStock->last_updated_at = now();
                 $destinationStock->save(); // This triggers the saving event to recalculate balance
 
@@ -276,7 +282,7 @@ class TaskStockUsageController extends Controller
             }
 
             // Update or delete the TaskStockUsage
-            $remainingQuantity = $usage->quantity - $validated['quantity_to_return'];
+            $remainingQuantity = round((float) $usage->quantity - (float) $validated['quantity_to_return'], 3);
             if ($remainingQuantity <= 0) {
                 // Delete the usage record directly from DB to avoid triggering the deleted event
                 // which would restore stock (we handle stock updates manually above)
@@ -285,7 +291,7 @@ class TaskStockUsageController extends Controller
                 // Update the usage with reduced quantity
                 $usage->update([
                     'quantity' => $remainingQuantity,
-                    'total_cost' => $remainingQuantity * $usage->unit_price,
+                    'total_cost' => round($remainingQuantity * (float) $usage->unit_price, 2),
                 ]);
             }
 

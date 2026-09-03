@@ -17,7 +17,11 @@ class WarehouseStock extends Model
     protected $fillable = [
         'warehouse_id',
         'product_id',
-        'quantity'   
+        'quantity'
+    ];
+
+    protected $casts = [
+        'quantity' => 'decimal:3',
     ];
 
     public function product()
